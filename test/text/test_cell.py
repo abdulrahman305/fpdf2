@@ -173,6 +173,15 @@ def test_cell_markdown(tmp_path):
     assert_pdf_equal(pdf, HERE / "cell_markdown.pdf", tmp_path)
 
 
+def test_cell_markdown_bold_italic(tmp_path):
+    # issue 1094
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Times", size=60)
+    pdf.cell(text="**__Lorem --Ipsum--__**", markdown=True)
+    assert_pdf_equal(pdf, HERE / "cell_markdown_bold_italic.pdf", tmp_path)
+
+
 def test_cell_markdown_with_ttf_fonts(tmp_path):
     pdf = FPDF()
     pdf.add_page()
@@ -254,10 +263,7 @@ def test_cell_newpos_badinput():
     pdf.add_page()
     pdf.set_font("Times", size=16)
     with pytest.raises(ValueError):
-        with pytest.warns(DeprecationWarning) as record:
-            pdf.cell(w=0, ln=5)
-        assert len(record) == 1
-        assert record[0].filename == __file__
+        pdf.cell(w=0, ln=5)
 
     with pytest.raises(TypeError):
         pdf.cell(w=0, new_x=5)

@@ -205,11 +205,12 @@ Ask maintainers through comments if some errors in the pipeline seem obscure to 
 1. complete `CHANGELOG.md` and add the version & date of the new release
 2. bump `FPDF_VERSION` in `fpdf/fpdf.py`.
 Also (optionnal, once every year), update `contributors/contributors-map-small.png` based on <https://py-pdf.github.io/fpdf2/contributors.html>
-3. `git commit` & `git push`
-4. check that [the GitHub Actions succeed](https://github.com/py-pdf/fpdf2/actions), and that [a new release appears on Pypi](https://pypi.org/project/fpdf2/#history)
-5. perform a [GitHub release](https://github.com/py-pdf/fpdf2/releases), taking the description from the `CHANGELOG.md`.
+3. update the `announce` block in `docs/overrides/main.html` to mention the new release
+4. `git commit` & `git push` (if editing in a fork: submit and merge a PR)
+5. check that [the GitHub Actions succeed](https://github.com/py-pdf/fpdf2/actions), and that [a new release appears on Pypi](https://pypi.org/project/fpdf2/#history)
+6. perform a [GitHub release](https://github.com/py-pdf/fpdf2/releases), taking the description from the `CHANGELOG.md`.
 It will create a new `git` tag.
-6. Announce the release on [r/pythonnews](https://www.reddit.com/r/pythonnews/),
+7. Announce the release on [r/pythonnews](https://www.reddit.com/r/pythonnews/),
    and add an announcement to the documentation website: [docs/overrides/main.html](https://github.com/py-pdf/fpdf2/blob/master/docs/overrides/main.html)
 
 ## Documentation
@@ -238,6 +239,8 @@ To preview the API documentation, launch a local rendering server with:
 ## PDF spec & new features
 The **PDF 1.7 spec** is available on Adobe website:
 [PDF32000_2008.pdf](https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf).
+
+The **PDF 2.0 spec** is available on the [Adobe website](https://developer.adobe.com/document-services/docs/assets/5b15559b96303194340b99820d3a70fa/PDF_ISO_32000-2.pdf) or on the [PDF Association website](https://www.pdfa.org/sponsored-standards)
 
 It may be intimidating at first, but while technical, it is usually quite clear and understandable.
 

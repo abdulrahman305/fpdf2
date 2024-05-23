@@ -63,6 +63,8 @@ Go try it **now** online in a Jupyter notebook: [![Open In Colab](https://colab.
 * [বাংলা](Tutorial-bn.md)
 * [ភាសខ្មែរ](Tutorial-km.md)
 * [日本語](Tutorial-ja.md)
+* [Dutch](Tutorial-nl.md)
+* [Polski](Tutorial-pl.md)
 
 ## Installation ##
 
@@ -116,11 +118,14 @@ or [open a discussion](https://github.com/py-pdf/fpdf2/discussions).
 [Wheelodex](https://www.wheelodex.org/projects/fpdf2/rdepends/) or [Watchman Pypi](http://www.watchman-pypi.com).
 Some are also listed on [its libraries.io page](https://libraries.io/pypi/fpdf2).
 
+[![Star history](https://api.star-history.com/svg?repos=py-pdf/fpdf2)](https://star-history.com/#py-pdf/fpdf2)
+
 ### Related ###
 
 * Looking for alternative libraries? Check out [pypdf](https://github.com/py-pdf/pypdf), [borb](https://github.com/jorisschellekens/borb), [pikepdf](https://github.com/pikepdf/pikepdf), [WeasyPrint](https://github.com/Kozea/WeasyPrint), [pydyf](https://pypi.org/project/pydyf/) and [PyMuPDF](https://pymupdf.readthedocs.io/en/latest/index.html): [features comparison](https://pymupdf.readthedocs.io/en/latest/about.html), [examples](https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/examples#examples), [Jupyter notebooks](https://github.com/pymupdf/PyMuPDF-Utilities/tree/master/jupyter-notebooks).
   We have some documentations about combining `fpdf2` with [`borb`](CombineWithBorb.md) & [`pypdf`](CombineWithPypdf.md).
 * [Create PDFs with Python](https://www.youtube.com/playlist?list=PLjNQtX45f0dR9K2sMJ5ad9wVjqslNBIC0) : a series of tutorial videos by bvalgard
+* [GitHub gist providing borders around any fpdf2 area](https://gist.github.com/hyperstown/88a44b28313549a43255f590f4915b1a), by [@hyperstown](https://github.com/hyperstown)
 * [digidigital/Extensions-and-Scripts-for-pyFPDF-fpdf2](https://github.com/digidigital/Extensions-and-Scripts-for-pyFPDF-fpdf2) : scripts ported from PHP to add transpareny to elements of the page or part of an image, allow to write circular text,
    draw pie charts and bar diagrams, embed JavaScript, draw rectangles with rounded corners, draw a star shape,
    restrict the rendering of some elements to screen or printout, paint linear / radial / multi-color gradients gradients, add stamps & watermarks, write sheared text...

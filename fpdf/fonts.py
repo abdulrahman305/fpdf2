@@ -18,10 +18,19 @@ from fontTools import ttLib
 
 try:
     import uharfbuzz as hb
+
+    # pylint: disable=no-member
+    class HarfBuzzFont(hb.Font):
+        "uharfbuzz.Font than can be deepcopied"
+
+        # cf. issue #1075, avoids: TypeError: no default __reduce__ due to non-trivial __cinit__
+        def __deepcopy__(self, _memo):
+            return self
+
 except ImportError:
     hb = None
 
-from .drawing import DeviceGray, DeviceRGB
+from .drawing import convert_to_device_color, DeviceGray, DeviceRGB
 from .enums import FontDescriptorFlags, TextEmphasis
 from .syntax import Name, PDFObject
 from .util import escape_parens
@@ -42,30 +51,34 @@ class FontFace:
         "fill_color",
     )
     family: Optional[str]
-    emphasis: Optional[TextEmphasis]  # can be a combination: B | U
+    emphasis: Optional[TextEmphasis]  # None means "no override"
+    #                                   Whereas "" means "no emphasis"
+    #                                   This can be a combination: B | U
     size_pt: Optional[int]
     # Colors are single number grey scales or (red, green, blue) tuples:
-    color: Optional[Union[int, tuple, DeviceGray, DeviceRGB]]
-    fill_color: Optional[Union[int, tuple, DeviceGray, DeviceRGB]]
+    color: Optional[Union[DeviceGray, DeviceRGB]]
+    fill_color: Optional[Union[DeviceGray, DeviceRGB]]
 
     def __init__(
         self, family=None, emphasis=None, size_pt=None, color=None, fill_color=None
     ):
         self.family = family
-        self.emphasis = TextEmphasis.coerce(emphasis) if emphasis else None
+        self.emphasis = None if emphasis is None else TextEmphasis.coerce(emphasis)
         self.size_pt = size_pt
-        self.color = color
-        self.fill_color = fill_color
+        self.color = None if color is None else convert_to_device_color(color)
+        self.fill_color = (
+            None if fill_color is None else convert_to_device_color(fill_color)
+        )
 
     replace = replace
 
     @staticmethod
-    def _override(override_value, current_value):
+    def _override(current_value, override_value):
         """Override the current value if an override value is provided"""
         return current_value if override_value is None else override_value
 
     @staticmethod
-    def combine(override_style, default_style):
+    def combine(default_style, override_style):
         """
         Create a combined FontFace with all the supplied features of the two styles. When both
         the default and override styles provide a feature, prefer the override style.
@@ -82,14 +95,15 @@ class FontFace:
         if not isinstance(default_style, FontFace):
             raise TypeError(f"Cannot combine FontFace with {type(default_style)}")
         return FontFace(
-            family=FontFace._override(override_style.family, default_style.family),
+            family=FontFace._override(default_style.family, override_style.family),
             emphasis=FontFace._override(
-                override_style.emphasis, default_style.emphasis
+                default_style.emphasis,
+                override_style.emphasis,
             ),
-            size_pt=FontFace._override(override_style.size_pt, default_style.size_pt),
-            color=FontFace._override(override_style.color, default_style.color),
+            size_pt=FontFace._override(default_style.size_pt, override_style.size_pt),
+            color=FontFace._override(default_style.color, override_style.color),
             fill_color=FontFace._override(
-                override_style.fill_color, default_style.fill_color
+                default_style.fill_color, override_style.fill_color
             ),
         )
 
@@ -269,22 +283,19 @@ class TTFFont:
         This method invokes Harfbuzz to perform text shaping of the input string
         """
         if not hasattr(self, "hbfont"):
-            self.hbfont = hb.Font(hb.Face(hb.Blob.from_file_path(self.ttffile)))
+            self.hbfont = HarfBuzzFont(hb.Face(hb.Blob.from_file_path(self.ttffile)))
         self.hbfont.ptem = font_size_pt
         buf = hb.Buffer()
         buf.cluster_level = 1
         buf.add_str("".join(text))
+        buf.guess_segment_properties()
         features = text_shaping_parms["features"]
-        if (
-            text_shaping_parms["direction"]
-            or text_shaping_parms["script"]
-            or text_shaping_parms["language"]
-        ):
-            buf.direction = text_shaping_parms["direction"]
+        if text_shaping_parms["fragment_direction"]:
+            buf.direction = text_shaping_parms["fragment_direction"].value
+        if text_shaping_parms["script"]:
             buf.script = text_shaping_parms["script"]
+        if text_shaping_parms["language"]:
             buf.language = text_shaping_parms["language"]
-        else:
-            buf.guess_segment_properties()
         hb.shape(self.hbfont, buf, features)
         return buf.glyph_infos, buf.glyph_positions
 

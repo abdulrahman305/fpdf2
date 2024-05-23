@@ -13,7 +13,7 @@ TABLE_DATA = (
     ("Jules", "Smith", "34", "San Juan"),
     ("Mary", "Ramos", "45", "Orlando"),
     ("Carlson", "Banks", "19", "Los Angeles"),
-    ("Lucas", "Cimon", "31", "Saint-Mahturin-sur-Loire"),
+    ("Lucas", "Cimon", "31", "Saint-Mathurin-sur-Loire"),
 )
 pdf = FPDF()
 pdf.add_page()
@@ -41,6 +41,7 @@ Result:
 * control table width & position
 * control over text alignment in cells, globally or per row
 * allow to embed images in cells
+* merge cells across columns and rows
 
 ## Setting table & column widths
 
@@ -133,11 +134,27 @@ with pdf.table(line_height=2.5 * pdf.font_size) as table:
 
 ## Disable table headings
 
+By default, `fpdf2` considers that the first row of tables contains its headings.
+This can however be disabled:
+
 ```python
 ...
 with pdf.table(first_row_as_headings=False) as table:
     ...
 ```
+
+_New in [:octicons-tag-24: 2.7.9](https://github.com/py-pdf/fpdf2/blob/master/CHANGELOG.md)_
+
+The **repetition** of table headings on every page can also be disabled:
+
+```python
+...
+with pdf.table(repeat_headings=0) as table:
+    ...
+```
+
+`"ON_TOP_OF_EVERY_PAGE"` is an equivalent valid value for `repeat_headings`
+, _cf._ [documentation on `TableHeadingsDisplay`](https://py-pdf.github.io/fpdf2/fpdf/enums.html#fpdf.enums.TableHeadingsDisplay).
 
 ## Style table headings
 
@@ -198,6 +215,28 @@ with pdf.table(cell_fill_color=lightblue, cell_fill_mode="COLUMNS") as table:
 Result:
 
 ![](table-with-cells-filled2.jpg)
+
+The cell color is set following those settings, ordered by priority:
+
+1. The cell `style`, provided to `Row.cell()`
+2. The row `style`, provided to `Table.row()`
+3. The table setting `headings_style.fill_color`, if the cell is part of some headings row
+4. The table setting `cell_fill_color`, if `cell_fill_mode` indicates to fill a cell
+5. The document `.fill_color` set before rendering the table
+
+Finally, it is possible to define your own cell-filling logic:
+
+```python
+class EvenOddCellFillMode():
+    @staticmethod
+    def should_fill_cell(i, j):
+        return i % 2 and j % 2
+
+...
+with pdf.table(cell_fill_color=lightblue, cell_fill_mode=EvenOddCellFillMode()) as table:
+    ...
+```
+
 
 ## Set borders layout
 
@@ -279,7 +318,7 @@ Result:
 ## Adding links to cells
 
 ```python
-                    row.cell(..., link="https://py-pdf.github.io/fpdf2/")
+row.cell(..., link="https://py-pdf.github.io/fpdf2/")
 row.cell(..., link=pdf.add_link(page=1))
 ```
 
@@ -327,9 +366,9 @@ Result:
 
 ![](table_with_gutter.jpg)
 
-## Column span
+## Column span and row span
 
-Cells spanning multiple columns can be defined by passing a `colspan` argument to `.cell()`.
+Cells spanning multiple columns or rows can be defined by passing a `colspan` or `rowspan` argument to `.cell()`.
 Only the cells with data in them need to be defined. This means that the number of cells on each row can be different.
 
 ```python
@@ -356,6 +395,73 @@ with pdf.table(col_widths=(1, 2, 1, 1)) as table:
 result:
 
 ![](image-colspan.png)
+
+
+
+```python
+    ...
+with pdf.table(text_align="CENTER") as table:
+    row = table.row()
+    row.cell("A1", colspan=2, rowspan=3)
+    row.cell("C1", colspan=2)
+    
+    row = table.row()
+    row.cell("C2", colspan=2, rowspan=2)
+    
+    row = table.row()
+    # all columns of this row are spanned by previous rows
+    
+    row = table.row()
+    row.cell("A4", colspan=4)
+    
+    row = table.row()
+    row.cell("A5", colspan=2)
+    row.cell("C5")
+    row.cell("D5")
+    
+    row = table.row()
+    row.cell("A6")
+    row.cell("B6", colspan=2, rowspan=2)
+    row.cell("D6", rowspan=2)
+    
+    row = table.row()
+    row.cell("A7")
+...
+```
+
+result:
+
+![](image-rowspan.png)
+
+Alternatively, the spans can be defined using the placeholder elements `TableSpan.COL` and `TableSpan.ROW`.
+These elements merge the current cell with the previous column or row respectively.
+
+For example, the previous example table can be defined as follows:
+
+```python
+    ...
+TABLE_DATA = [
+    ["A",           "B",            "C",            "D"],
+    ["A1",          TableSpan.COL,  "C1",           TableSpan.COL],
+    [TableSpan.ROW, TableSpan.ROW,  "C2",           TableSpan.COL],
+    [TableSpan.ROW, TableSpan.ROW,  TableSpan.ROW,  TableSpan.ROW],
+    ["A4",          TableSpan.COL,  TableSpan.COL,  TableSpan.COL],
+    ["A5",          TableSpan.COL,  "C5",           "D5"],
+    ["A6",          "B6",           TableSpan.COL,  "D6"],
+    ["A7",          TableSpan.ROW,  TableSpan.ROW,  TableSpan.ROW],
+]
+
+with pdf.table(TABLE_DATA, text_align="CENTER"):
+    pass
+...
+```
+
+result:
+
+![](image-rowspan.png)
+
+
+
 
 ## Table with multiple heading rows
 

@@ -5,14 +5,16 @@ import pytest
 from fpdf import FPDF
 from fpdf.enums import MethodReturnValue, YPos, TableCellFillMode, VAlign
 from fpdf.fonts import FontFace
+from fpdf.table import draw_box_borders
+
 from test.conftest import assert_pdf_equal, LOREM_IPSUM
 
 HERE = Path(__file__).resolve().parent
 
 
-def run_comparison(pdf, name, tmp_path):
+def run_comparison(pdf, name, tmp_path, generate=False):
     filename = HERE / f"{name}.pdf"
-    assert_pdf_equal(pdf, filename, tmp_path, generate=False)
+    assert_pdf_equal(pdf, filename, tmp_path, generate=generate)
 
 
 IMG_DIR = HERE.parent / "image"
@@ -51,10 +53,14 @@ TABLE_DATA = (
     ("Lucas", "Cimon", "31", "Angers"),
 )
 
-LONG_TEXT = """
-Professor: (Eric Idle) It's an entirely new strain of sheep, a killer sheep that can not only hold a rifle but is also a first-class shot.
-Assistant: But where are they coming from, professor?
-Professor: That I don't know. I just don't know. I really just don't know. I'm afraid I really just don't know. I'm afraid even I really just don't know. I have to tell you I'm afraid even I really just don't know. I'm afraid I have to tell you... (she hands him a glass of water which she had been busy getting as soon as he started into this speech) ... thank you ... (resuming normal breezy voice) ... I don't know. Our only clue is this portion of wolf's clothing which the killer sheep ..."""
+LONG_TEXT = (
+    "\nProfessor: (Eric Idle) It's an entirely new strain of sheep, a killer sheep that can not only hold a rifle but is also a first-class shot.\n"
+    "Assistant: But where are they coming from, professor?\n"
+    "Professor: That I don't know. I just don't know. I really just don't know. I'm afraid I really just don't know. I'm afraid even I really just"
+    " don't know. I have to tell you I'm afraid even I really just don't know. I'm afraid I have to tell you... (she hands him a glass of water"
+    " which she had been busy getting as soon as he started into this speech) ... thank you ... (resuming normal breezy voice) ... I don't know."
+    " Our only clue is this portion of wolf's clothing which the killer sheep ..."
+)
 
 
 TABLE_DATA_LIST = ["And", "now", "for", "something", "completely", "different"]
@@ -73,7 +79,7 @@ def test_multicell_with_padding(tmp_path):
     run_comparison(pdf, "multicell_with_padding", tmp_path)
 
 
-def test_multicell_with_padding_check_input(tmp_path):
+def test_multicell_with_padding_check_input():
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Times", size=16)
@@ -135,7 +141,6 @@ def test_multicell_return_value(tmp_path):
     pdf.x = 5
     pdf.y += 10
 
-    old_y = pdf.y
     out = pdf.multi_cell(
         0,
         5,
@@ -145,8 +150,6 @@ def test_multicell_return_value(tmp_path):
         output=MethodReturnValue.PAGE_BREAK | MethodReturnValue.HEIGHT,
         new_y=YPos.NEXT,
     )
-
-    # assert pdf.y == old_y + height_with_padding
 
     run_comparison(pdf, "table_with_padding", tmp_path)
 
@@ -214,7 +217,7 @@ def test_table_with_only_images(tmp_path):
         cell_fill_color=(150, 200, 255),
         cell_fill_mode=TableCellFillMode.ROWS,
     ) as table:
-        for i, data_row in enumerate(IMAGES_DATA):
+        for data_row in IMAGES_DATA:
             row = table.row()
             for datum in data_row:
                 row.cell(img=datum)
@@ -240,7 +243,7 @@ def test_table_vertical_alignment(tmp_path):
     pdf.ln(0.1)
 
     for v in (VAlign.T, VAlign.M, VAlign.B):
-        pdf.write_html("<h1>Vertical alignment: {}</h1>".format(v))
+        pdf.write_html(f"<h1>Vertical alignment: {v}</h1>")
 
         with pdf.table(line_height=pdf.font_size, padding=3, v_align=v) as table:
             for data_row in TABLE_DATA:
@@ -299,7 +302,7 @@ def test_valign_per_cell(tmp_path):
                 elif irow == 3:
                     v_align = VAlign.B
 
-                if irow == 2 or irow == 3:
+                if irow in (2, 3):
                     row.cell(
                         f"{datum}: custom v-align {v_align}",
                         style=deathstyle,
@@ -341,39 +344,25 @@ def test_table_with_colspan(tmp_path):
 
         if n % 4 == 0:
             return f"{a} {b}"
-        elif n % 4 == 1:
+        if n % 4 == 1:
             return f"{a} {b} {a}"
-        elif n % 4 == 2:
+        if n % 4 == 2:
             return f"{b} {a}"
 
         return a
-
-    cs = 1
 
     with pdf.table(line_height=pdf.font_size, gutter_height=3, gutter_width=3) as table:
         for irow in range(10):
             row = table.row()
             for icol in range(10):
-                # if cs>1:
-                #     cs -= 1
-                #     continue
-                #
                 txt = make_text(irow * 10 + icol)
-                # cs = round(sin(irow * 10 + icol)+2)
-                #
-                # if irow == 0:
-                #     cs = 1
-                cs = 1
-
                 txt = str(icol) + " " + txt
-
                 if irow > 0:
                     if icol == 2:
                         row.cell(txt + " SPAN 2", colspan=2)
                         continue
-                    elif icol == 3:
+                    if icol == 3:
                         continue
-
                 row.cell(txt)
 
     run_comparison(pdf, "table_with_colspan", tmp_path)
@@ -385,9 +374,9 @@ def test_outside_border_width(tmp_path):
     pdf.set_font("Times", size=12)
 
     with pdf.table(outer_border_width=1, gutter_height=10, gutter_width=15) as table:
-        for irow in range(5):
+        for _ in range(5):
             row = table.row()
-            for icol in range(5):
+            for _ in range(5):
                 datum = "Circus"
                 row.cell(datum)
 
@@ -525,8 +514,6 @@ def test_draw_box_borders(tmp_path):
     pdf = FPDF()
     pdf.set_font("Times", size=16)
     pdf.add_page()
-
-    from fpdf.table import draw_box_borders
 
     def box(x, y, borders):
         draw_box_borders(

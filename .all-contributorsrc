@@ -615,7 +615,8 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/79044603?v=4",
       "profile": "https://github.com/dmail00",
       "contributions": [
-        "bug"
+        "bug",
+        "code"
       ]
     },
     {
@@ -624,7 +625,8 @@
       "avatar_url": "https://avatars.githubusercontent.com/u/8699267?v=4",
       "profile": "https://github.com/GerardoAllende",
       "contributions": [
-        "code"
+        "code",
+        "research"
       ]
     },
     {
@@ -1040,6 +1042,133 @@
       "profile": "https://github.com/matt-b8",
       "contributions": [
         "doc"
+      ]
+    },
+    {
+      "login": "matipos2",
+      "name": "matipos2",
+      "avatar_url": "https://avatars.githubusercontent.com/u/143452309?v=4",
+      "profile": "https://github.com/matipos2",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "lry12138",
+      "name": "lry12138",
+      "avatar_url": "https://avatars.githubusercontent.com/u/17554717?v=4",
+      "profile": "https://github.com/lry12138",
+      "contributions": [
+        "translation"
+      ]
+    },
+    {
+      "login": "mjasperse",
+      "name": "Martijn Jasperse",
+      "avatar_url": "https://avatars.githubusercontent.com/u/146605?v=4",
+      "profile": "https://github.com/mjasperse",
+      "contributions": [
+        "bug",
+        "code"
+      ]
+    },
+    {
+      "login": "demiurgepy",
+      "name": "demiurgepy",
+      "avatar_url": "https://avatars.githubusercontent.com/u/101707731?v=4",
+      "profile": "https://github.com/demiurgepy",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "MarekT0v",
+      "name": "Marek Tovlin",
+      "avatar_url": "https://avatars.githubusercontent.com/u/147847966?v=4",
+      "profile": "https://github.com/MarekT0v",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "Polderrider",
+      "name": "Polderrider",
+      "avatar_url": "https://avatars.githubusercontent.com/u/51285379?v=4",
+      "profile": "https://github.com/Polderrider",
+      "contributions": [
+        "translation"
+      ]
+    },
+    {
+      "login": "valholl",
+      "name": "Elena ``of Valhalla''",
+      "avatar_url": "https://avatars.githubusercontent.com/u/301204?v=4",
+      "profile": "https://github.com/valholl",
+      "contributions": [
+        "test"
+      ]
+    },
+    {
+      "login": "nocalla",
+      "name": "Niall O'Callaghan",
+      "avatar_url": "https://avatars.githubusercontent.com/u/16230431?v=4",
+      "profile": "https://github.com/nocalla",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "jsid72",
+      "name": "jsid72",
+      "avatar_url": "https://avatars.githubusercontent.com/u/51690199?v=4",
+      "profile": "https://github.com/jsid72",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "Alan-Collins",
+      "name": "Alan Collins",
+      "avatar_url": "https://avatars.githubusercontent.com/u/38288262?v=4",
+      "profile": "https://www.linkedin.com/in/alan-collins/",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "hyperstown",
+      "name": "hyperstown",
+      "avatar_url": "https://avatars.githubusercontent.com/u/64496017?v=4",
+      "profile": "https://github.com/hyperstown",
+      "contributions": [
+        "content"
+      ]
+    },
+    {
+      "login": "Clock-Speed",
+      "name": "Clock-Speed",
+      "avatar_url": "https://avatars.githubusercontent.com/u/55024400?v=4",
+      "profile": "https://github.com/Clock-Speed",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "DarekRepos",
+      "name": "Darek",
+      "avatar_url": "https://avatars.githubusercontent.com/u/32545344?v=4",
+      "profile": "https://github.com/DarekRepos",
+      "contributions": [
+        "translation"
+      ]
+    },
+    {
+      "login": "carlhiggs",
+      "name": "Carl Higgs",
+      "avatar_url": "https://avatars.githubusercontent.com/u/12984626?v=4",
+      "profile": "http://www.carlhiggs.com",
+      "contributions": [
+        "code"
       ]
     }
   ],

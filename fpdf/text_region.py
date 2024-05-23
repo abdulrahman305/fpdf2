@@ -3,7 +3,8 @@ from typing import NamedTuple, Sequence, List, NewType
 
 from .errors import FPDFException
 from .enums import Align, XPos, YPos, WrapMode
-from .image_parsing import VectorImageInfo
+from .image_datastructures import VectorImageInfo
+from .image_parsing import preload_image
 from .line_break import MultiLineBreak, FORM_FEED
 
 # Since Python doesn't have "friend classes"...
@@ -80,6 +81,13 @@ class Paragraph:  # pylint: disable=function-redefined
         else:
             self.wrapmode = WrapMode.coerce(wrapmode)
         self._text_fragments = []
+
+    def __str__(self):
+        return (
+            f"Paragraph(text_align={self.text_align}, line_height={self.line_height}, top_margin={self.top_margin},"
+            f" bottom_margin={self.bottom_margin}, skip_leading_spaces={self.skip_leading_spaces}, wrapmode={self.wrapmode},"
+            f" #text_fragments={len(self._text_fragments)})"
+        )
 
     def __enter__(self):
         return self
@@ -175,7 +183,9 @@ class ImageParagraph:
     def build_line(self):
         # We do double duty as a "text line wrapper" here, since all the necessary
         # information is already in the ImageParagraph object.
-        self.name, self.img, self.info = self.region.pdf.preload_image(self.name, None)
+        self.name, self.img, self.info = preload_image(
+            self.region.pdf.image_cache, self.name
+        )
         return self
 
     def render(self, col_left, col_width, max_height):
@@ -184,6 +194,8 @@ class ImageParagraph:
                 "ImageParagraph.build_line() must be called before render()."
             )
         is_svg = isinstance(self.info, VectorImageInfo)
+
+        # pylint: disable=possibly-used-before-assignment
         if self.height:
             h = self.height
         else:

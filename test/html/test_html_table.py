@@ -127,7 +127,7 @@ def test_html_table_with_imgs_captions_and_colspan(caplog, tmp_path):
     pdf = FPDF()
     pdf.add_page()
     pdf.write_html(
-        """<table border="1">
+        """<table border="0">
         <tr>
             <td colspan="2" align="center"><b>Side by side centered pictures and captions</b></td>
         </tr>
@@ -144,9 +144,7 @@ def test_html_table_with_imgs_captions_and_colspan(caplog, tmp_path):
         )
     )
     assert_pdf_equal(
-        pdf,
-        HERE / "html_table_with_imgs_captions_and_colspan.pdf",
-        tmp_path,
+        pdf, HERE / "html_table_with_imgs_captions_and_colspan.pdf", tmp_path
     )
     assert (
         'Ignoring width="50%" specified on a <td> that is not in the first <tr>'
@@ -305,3 +303,73 @@ def test_html_table_with_nested_tags():  # issue 845
             <td>This <font size=20>is not</font> <b>supported</b></td>
         </tr></table>"""
         )
+
+
+def test_html_table_with_font_tags_used_to_set_text_color(tmp_path):  # issue 1013
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=8)
+    pdf.write_html(
+        """<table>
+    <thead>
+        <tr bgcolor="#711C45">
+            <th width="25%"><font color="#711C45">Mark</font></th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr bgcolor="#E4E4E4">
+            <td align="center"><font color="#E4E4E4">less than 2</font></td>
+        </tr>
+    </tbody>
+    </table>"""
+    )
+    assert_pdf_equal(
+        pdf,
+        HERE / "html_table_with_font_tags_used_to_set_text_color.pdf",
+        tmp_path,
+    )
+
+
+def test_html_table_with_data_that_contains_entity_names(tmp_path):  # issue 1010
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=8)
+    pdf.write_html(
+        """<table>
+    <thead>
+        <tr>
+            <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Pi &lt; 22 &divide; 7</td>
+        </tr>
+    </tbody>
+    </table>"""
+    )
+    assert_pdf_equal(
+        pdf,
+        HERE / "html_table_with_data_that_contains_entity_names.pdf",
+        tmp_path,
+    )
+
+
+def test_html_table_honoring_align(tmp_path):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.write_html(
+        """<table>
+          <tr>
+            <th align="right">Foo</th>
+            <th align="center">Bar</th>
+            <th align="left">Baz</th>
+          </tr>
+          <tr>
+            <td align="right">Foo</td>
+            <td align="center">Bar</td>
+            <td align="left">Baz</td>
+          </tr>
+        </table>"""
+    )
+    assert_pdf_equal(pdf, HERE / "html_table_honoring_align.pdf", tmp_path)

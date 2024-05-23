@@ -16,18 +16,87 @@ in order to get warned about deprecated features used in your code.
 
 This can also be enabled programmatically with `warnings.simplefilter('default', DeprecationWarning)`.
 
-## [2.7.7] - Not released yet
+## [2.8.0] - Not released yet
 ### Added
-* SVG importing now supports clipping paths, and `defs` tags anywhere in the SVG file
-* [`TextColumns()`](https://py-pdf.github.io/fpdf2/TextColumns.html) can now have images inserted (both raster and vector).
-* [`TextColumns()`](https://py-pdf.github.io/fpdf2/TextColumns.html) can now advance to the next column with the new `new_column()` method or a FORM_FEED character (`\u000c`) in the text.
+
 ### Fixed
-* `FPDF.set_font_color()` raised a `TypeError` when used in tables
-* `FPDF.image(x=Align.C)` used to fail for SVG images.
-* Previously set dash patterns were not transferred correctly to new pages.
-* Inserted Vector images used to ignore the `keep_aspect_ratio` argument.
-* [`FPDF.fonts.FontFace`](https://py-pdf.github.io/fpdf2/fpdf/fonts.html#fpdf.fonts.FontFace): Now has a static `combine` method that allows overriding a default FontFace (e.g. for specific cells in a table). Unspecified properties of the override FontFace retain the values of the default.
+
 ### Changed
+
+### Deprecated
+
+
+## [2.7.9] - 2024-05-17
+### Added
+* new optional parameter `repeat_headings` for [`FPDF.table()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.table) that indicates whether to print table headings on every page
+* support for overriding paragraph direction on bidirectional text
+* new optional `li_prefix_color` parameter for [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html)
+* support for `start` & `type` attributes of `<ol>` tags, and `type` attribute of `<ul>` tags, when using [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html)
+* [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html) now accepts a `tag_styles` parameter to control the font, color & size of HTML elements: `<a>`, `<blockquote>`, `<li>`...
+* [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html) now accepts a `tag_indents` parameter to control, for example, the indent of `<blockquote>` elements
+* [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html) now honors `line-height` attributes on `<ol>` & `<li>` elements, or the same CSS property in `style` attributes on those tags
+* allow to define custom `cell_fill_mode` logic for tables: [_Set cells background_ - documentation section](https://py-pdf.github.io/fpdf2/Tables.html#set-cells-background). Also added 2 new values: `TableCellFillMode.EVEN_ROWS` & `TableCellFillMode.EVEN_COLUMNS`: [documentation](https://py-pdf.github.io/fpdf2/fpdf/enums.html#fpdf.enums.TableCellFillMode)
+### Fixed
+* a bug when rendering vector images with dashed lines that caused a warning message in Adobe Acrobat Reader
+* ordering RTL fragments on bidirectional texts
+* fixed type hint of member `level` in class [`OutlineSection`](https://py-pdf.github.io/fpdf2/fpdf/outline.html#fpdf.outline.OutlineSection) from `str` to `int`.
+* SVG clipping paths being incorrectly painted - _cf._ [issue #1147](https://github.com/py-pdf/fpdf2/issues/1147)]
+* new translation of the tutorial in [Polski](https://py-pdf.github.io/fpdf2/Tutorial-pl.html) - thanks to @DarekRepos
+### Changed
+* improved the performance of `FPDF.start_section()` - _cf._ [issue #1092](https://github.com/py-pdf/fpdf2/issues/1092)
+### Deprecated
+* The `dd_tag_indent` & `li_tag_indent` parameters of `FPDF.write_html()` are replaced by the new `tag_indents` generic parameter.
+* The `heading_sizes` & `pre_code_font` parameters of `FPDF.write_html()` are replaced by the new `tag_styles` generic parameter.
+
+## [2.7.8] - 2024-02-09
+### Added
+* support for `<path>` elements in SVG `<clipPath>` elements
+* support for `bidirectional` text shaping - thanks to @andersonhc
+* documentation on how to combine `fpdf2` with [mistletoe](https://pypi.org/project/kaleido/) in order to [generate PDF documents from Markdown (link)](https://py-pdf.github.io/fpdf2/CombineWithMistletoeoToUseMarkdown.html)
+* tutorial in Dutch: [Handleiding](https://py-pdf.github.io/fpdf2/Tutorial-nl.md) - thanks to @Polderrider
+* support for `Table` cells that span multiple rows via the `rowspan` attribute, which can be combined with `colspan` - thanks to @mjasperse
+* `TableSpan.COL` and `TableSpan.ROW` enums that can be used as placeholder table entries to identify span extents - thanks to @mjasperse
+### Fixed
+* when adding a link on a table cell, an extra link was added erroneously on the left. Moreover, now `FPDF._disable_writing()` properly disable link writing.
+* [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html) now handles linking directly to other pages - thanks to @mjasperse
+* non-bold `TitleStyle` is now rendered as non-bold even when the current font is bold
+* calling `.table()` inside the `render_toc_function`
+* using `.set_text_shaping(True)` & `.offset_rendering()`
+* fixed gutter handing when a pagebreak occurs within a table with header rows - thanks to @mjasperse
+* fixed handling of `border=0` in HTML table - thanks to @mjasperse
+* [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html) now properly honors `align=` attributes in `<th>` tags
+* fixed problem using bold italic standard fonts in markdown - thanks to @Alan-Collins
+### Changed
+* refactored [`FPDF.multi_cell()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.multi_cell) to generate fewer PDF component objects - thanks to @mjasperse
+* outer table borders are now drawn continuously for nonzero `gutter_width`/`gutter_height`, with spacing applied inside the border similar to HTML tables - thanks to @mjasperse - cf. [#1071](https://github.com/py-pdf/fpdf2/issues/1071)
+* removed the requirement that all rows in a `Table` have the same number of columns - thanks to @mjasperse
+### Deprecated
+- font aliases (`Arial` → `Helvetica`, `CourierNew` → `Courier`, `TimesNewRoman` → `Times`). They will be removed in a later release.
+
+## [2.7.7] - 2023-12-10
+### Added
+* Basic support for `<image>` elements in SVG vector graphics inserted
+* SVG importing now supports clipping paths, and `<defs>` tags anywhere in the SVG file - thanks to @afriedman412 - cf. [#968](https://github.com/py-pdf/fpdf2/pull/968)
+* [`FPDF.fonts.FontFace`](https://py-pdf.github.io/fpdf2/fpdf/fonts.html#fpdf.fonts.FontFace): Now has a static `combine` method that allows overriding a default FontFace (e.g. for specific cells in a table). Unspecified properties of the override FontFace retain the values of the default - thanks to @TedBrookings - cf. [#979](https://github.com/py-pdf/fpdf2/pull/979)
+* [`TextColumns()`](https://py-pdf.github.io/fpdf2/TextColumns.html) can now have images inserted (both raster and vector) - thanks to @gmischler
+* [`TextColumns()`](https://py-pdf.github.io/fpdf2/TextColumns.html) can now advance to the next column with the new `new_column()` method or a FORM_FEED character (`\u000c`) in the text - thanks to @gmischler
+* Added support for Free Text annotations: [documentation](https://py-pdf.github.io/fpdf2/Annotations.html#free-text-annotations) - thanks to @MarekT0v - cf. [#1039](https://github.com/py-pdf/fpdf2/pull/1039)
+* Tutorial in Dutch: [Handleiding](https://py-pdf.github.io/fpdf2/Tutorial-nl.md) - thanks to @Polderrider
+* Python 3.12 is now officially supported
+### Fixed
+* Links over text in tables were broken in release 2.7.6, this is now fixed
+* `FPDF.set_font_color()` raised a `TypeError` when used in tables
+* `FPDF.image(x=Align.C)` used to fail for SVG images - fixed thanks to @gmischler - cf. [#1003](https://github.com/py-pdf/fpdf2/pull/1003)
+* Previously set dash patterns were not transferred correctly to new pages - fixed thanks to @gmischler - cf. [#993](https://github.com/py-pdf/fpdf2/pull/993)
+* Inserted Vector images used to ignore the `keep_aspect_ratio` argument.
+* [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html) now properly honor the current text font color when styling table cells
+* [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html) delays unescaping data so as not to confuse entity names as nested tags
+* [`FPDF.multi_cell()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.multi_cell) has improved handling of `new_x` and `new_y` when `padding` is non-zero.
+* [`FPDF.multi_cell(fill=True)`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.multi_cell) now avoids overlapping multiline strings when `padding` is non-zero.
+### Changed
+* the public `.images`, `.icc_profiles` & `.image_filter` attributes of `FPDF` instances have been moved inside a nested `FPDF.image_cache` attribute. Similarly, the `FPDF.preload_image()` is now a function in the `fpdf.image_parsing` module: [documentation](https://py-pdf.github.io/fpdf2/fpdf/image_parsing.html#fpdf.image_parsing.preload_image)
+* the `fpdf.svg` module now produces `WARNING` log messages for unsupported SVG tags & attributes.
+  If those logs annoy you, you can suppress them: `logging.getLogger("fpdf.svg").propagate = False`
 * [`FPDF.table()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.table): If cell styles are provided for cells in heading rows, combine the cell style as an override with the overall heading style.
 
 ## [2.7.6] - 2023-10-11

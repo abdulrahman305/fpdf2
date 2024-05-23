@@ -41,8 +41,8 @@ markdown_extensions:
   - md_in_html
   - pymdownx.critic
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight
   - pymdownx.superfences
   - toc:
@@ -80,6 +80,8 @@ plugins:
         - 'Tutorial-he'
         - 'Tutorial-zh'
         - 'Tutorial-ja'
+        - 'Tutorial-nl'
+        - 'Tutorial-pl'
       #cover: false
       #back_cover: true
       #custom_template_path: TEMPLATES PATH
@@ -100,6 +102,10 @@ plugins:
       #debug_html: true
       #show_anchors: true
       #verbose: true
+
+hooks:
+  - docs/overrides/.hooks/log_manager.py
+
 nav:
 - 'Project Home':                   'index.md'
 - 'Tutorial':
@@ -118,6 +124,7 @@ nav:
   - 'מדריך בעברית':                     'Tutorial-he.md'
   - '简体中文教程':                   'Tutorial-zh.md'
   - '日本語チュートリアル':           'Tutorial-ja.md'
+  - 'Handleiding in Dutch':    'Tutorial-nl.md'
 - 'Page Layout':
   - 'Page Format and Orientation':    'PageFormatAndOrientation.md'
   - 'Margins':                        'Margins.md'
@@ -156,6 +163,7 @@ nav:
 - 'Mixing other libs':
   - 'Combine with borb':              'CombineWithBorb.md'
   - 'Combine with livereload':        'CombineWithLivereload.md'
+  - 'Combine with mistletoe':         'CombineWithMistletoeoToUseMarkdown.md'
   - 'Combine with pypdf':             'CombineWithPypdf.md'
   - 'Combine with pdfrw':             'CombineWithPdfrw.md'
   - 'Matplotlib, Pandas, Plotly, Pygal': 'CombineWithChartingLibs.md'

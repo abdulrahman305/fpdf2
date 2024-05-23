@@ -54,7 +54,7 @@ class CoerciveEnum(Enum):
 
             raise ValueError(f"{value} is not a valid {cls.__name__}")
 
-        raise TypeError(f"{value} cannot convert to a {cls.__name__}")
+        raise TypeError(f"{value} cannot be converted to a {cls.__name__}")
 
 
 class CoerciveIntEnum(IntEnum):
@@ -227,6 +227,9 @@ class TextEmphasis(CoerciveIntFlag):
         style = B | I
     """
 
+    NONE = 0
+    "No emphasis"
+
     B = 1
     "Bold"
 
@@ -246,7 +249,7 @@ class TextEmphasis(CoerciveIntFlag):
     def coerce(cls, value):
         if isinstance(value, str):
             if value == "":
-                return 0
+                return cls.NONE
             if value.upper() == "BOLD":
                 return cls.B
             if value.upper() == "ITALICS":
@@ -313,6 +316,52 @@ class TableCellFillMode(CoerciveEnum):
 
     COLUMNS = intern("COLUMNS")
     "Fill only table cells in odd columns"
+
+    EVEN_ROWS = intern("EVEN_ROWS")
+    "Fill only table cells in even rows"
+
+    EVEN_COLUMNS = intern("EVEN_COLUMNS")
+    "Fill only table cells in even columns"
+
+    @classmethod
+    def coerce(cls, value):
+        "Any class that has a .should_fill_cell() method is considered a valid 'TableCellFillMode' (duck-typing)"
+        if callable(getattr(value, "should_fill_cell", None)):
+            return value
+        return super().coerce(value)
+
+    def should_fill_cell(self, i, j):
+        if self is self.NONE:
+            return False
+        if self is self.ALL:
+            return True
+        if self is self.ROWS:
+            return i % 2 == 1
+        if self is self.COLUMNS:
+            return j % 2 == 1
+        if self is self.EVEN_ROWS:
+            return i % 2 == 0
+        if self is self.EVEN_COLUMNS:
+            return j % 2 == 0
+        raise NotImplementedError
+
+
+class TableSpan(CoerciveEnum):
+    ROW = intern("ROW")
+    "Mark this cell as a continuation of the previous row"
+
+    COL = intern("COL")
+    "Mark this cell as a continuation of the previous column"
+
+
+class TableHeadingsDisplay(CoerciveIntEnum):
+    "Defines how the table headings should be displayed"
+
+    NONE = 0
+    "0: Only render the table headings at the beginning of the table"
+
+    ON_TOP_OF_EVERY_PAGE = 1
+    "1: When a page break occurs, repeat the table headings at the top of every table fragment"
 
 
 class RenderStyle(CoerciveEnum):
@@ -866,3 +915,18 @@ class EncryptionMethod(Enum):
     RC4 = 1
     AES_128 = 2
     AES_256 = 3
+
+
+class TextDirection(CoerciveEnum):
+    "Text rendering direction for text shaping"
+    LTR = intern("LTR")
+    "left to right"
+
+    RTL = intern("RTL")
+    "right to left"
+
+    TTB = intern("TTB")
+    "top to bottom"
+
+    BTT = intern("BTT")
+    "bottom to top"

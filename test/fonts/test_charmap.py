@@ -9,9 +9,9 @@ the range of the C 'short' data type (2 bytes, 0 - 65535):
   fpdf/ttfonts.py:671: UserWarning: cmap value too big/small:
 and this seems to be okay.
 """
+
 import logging
 from pathlib import Path
-import sys
 
 from fontTools.ttLib import TTFont
 import pytest
@@ -22,10 +22,6 @@ from test.conftest import assert_pdf_equal, ensure_exec_time_below
 HERE = Path(__file__).resolve().parent
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 8),
-    reason="fontTools dropped support for 3.7. https://github.com/py-pdf/fpdf2/pull/863",
-)
 @pytest.mark.parametrize(
     "font_filename",
     [

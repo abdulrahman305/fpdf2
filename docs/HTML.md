@@ -40,8 +40,16 @@ pdf.write_html("""
   </section>
   <section>
     <h2>Other section title</h2>
-    <ul><li>unordered</li><li>list</li><li>items</li></ul>
-    <ol><li>ordered</li><li>list</li><li>items</li></ol>
+    <ul type="circle">
+      <li>unordered</li>
+      <li>list</li>
+      <li>items</li>
+    </ul>
+    <ol start="3" type="i">
+      <li>ordered</li>
+      <li>list</li>
+      <li>items</li>
+    </ol>
     <br>
     <br>
     <pre>i am preformatted text.</pre>
@@ -71,6 +79,47 @@ pdf.output("html.pdf")
 ```
 
 
+## Styling HTML tags globally
+
+_New in [:octicons-tag-24: 2.7.9](https://github.com/py-pdf/fpdf2/blob/master/CHANGELOG.md)_
+
+The style of several HTML tags (`<a>`, `<blockquote>`, `<code>`, `<pre>`, `<h1>`, `<h2>`, `<h3>`...) can be set globally, for the whole HTML document, by passing `tag_styles` to `FPDF.write_html()`:
+
+```python
+from fpdf import FPDF, FontFace
+
+pdf = FPDF()
+pdf.add_page()
+pdf.write_html("""
+  <h1>Big title</h1>
+  <section>
+    <h2>Section title</h2>
+    <p>Hello world!</p>
+  </section>
+""", tag_styles={
+    "h1": FontFace(color=(148, 139, 139), size_pt=32),
+    "h2": FontFace(color=(148, 139, 139), size_pt=24),
+})
+pdf.output("html_styled.pdf")
+```
+
+Similarly, the indentation of several HTML tags (`<blockquote>`, `<dd>`, `<li>`) can be set globally, for the whole HTML document, by passing `tag_indents` to `FPDF.write_html()`:
+
+```python
+from fpdf import FPDF
+
+pdf = FPDF()
+pdf.add_page()
+pdf.write_html("""
+  <dl>
+      <dt>Term</dt>
+      <dd>Definition</dd>
+  </dl>
+""", tag_indents={"dd": 5})
+pdf.output("html_dd_indented.pdf")
+```
+
+
 ## Supported HTML features
 
 * `<h1>` to `<h8>`: headings (and `align` attribute)
@@ -78,19 +127,19 @@ pdf.output("html.pdf")
 * `<b>`, `<i>`, `<u>`: bold, italic, underline
 * `<font>`: (and `face`, `size`, `color` attributes)
 * `<center>` for aligning
-* `<a>`: links (and `href` attribute)
+* `<a>`: links (and `href` attribute) to a file, URL, or page number.
 * `<pre>` & `<code>` tags
 * `<img>`: images (and `src`, `width`, `height` attributes)
 * `<ol>`, `<ul>`, `<li>`: ordered, unordered and list items (can be nested)
 * `<dl>`, `<dt>`, `<dd>`: description list, title, details (can be nested)
 * `<sup>`, `<sub>`: superscript and subscript text
-* `<table>`: (with `align`, `border`, `width` attributes)
+* `<table>`: (with `align`, `border`, `width`, `cellpadding`, `cellspacing` attributes)
     + `<thead>`: optional tag, wraps the table header row
     + `<tfoot>`: optional tag, wraps the table footer row
     + `<tbody>`: optional tag, wraps the table rows with actual content
     + `<tr>`: rows (with `align`, `bgcolor` attributes)
     + `<th>`: heading cells (with `align`, `bgcolor`, `width` attributes)
-    * `<td>`: cells (with `align`, `bgcolor`, `width` attributes)
+    * `<td>`: cells (with `align`, `bgcolor`, `width`, `rowspan`, `colspan` attributes)
 
 
 ## Known limitations
@@ -101,4 +150,9 @@ For example:
 * `<table>` cells can contain `<td><b><em>nested tags forming a single text block</em></b></td>`, but **not** `<td><b>arbitrarily</b> nested <em>tags</em></td>` - _cf._ [issue #845](https://github.com/py-pdf/fpdf2/issues/845)
 
 You can also check the currently open GitHub issues with the tag `html`:
-<https://github.com/py-pdf/fpdf2/issues?q=is%3Aopen+label%3Ahtml>
+[label:html is:open](https://github.com/py-pdf/fpdf2/issues?q=is%3Aopen+label%3Ahtml)
+
+
+## Using Markdown
+
+Check [Combine with mistletoe to use Markdown](CombineWithMistletoeoToUseMarkdown.md)

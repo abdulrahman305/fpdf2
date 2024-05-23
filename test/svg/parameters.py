@@ -770,6 +770,19 @@ test_svg_sources = (
         svgfile("shapes_def_test.svg"), id="shapes defined in 'defs' tag - issue #858"
     ),
     pytest.param(svgfile("clip_path.svg"), id="clip path - issue #858"),
+    pytest.param(svgfile("embedded-raster-images.svg"), id="Raster <image> tests"),
+    pytest.param(
+        svgfile("use-image-def.svg"),
+        id="Use xlink:href to insert an <image> from <defs>",
+    ),
+    pytest.param(
+        svgfile("issue-1076.svg"),
+        id="<clipPath> containing a <path>",
+    ),
+    pytest.param(
+        svgfile("path_clippingpath.svg"),
+        id="<clipPath> containing a <path> used in a group with color - issue #1147",
+    ),
 )
 
 svg_path_edge_cases = (

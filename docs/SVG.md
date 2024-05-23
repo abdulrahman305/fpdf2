@@ -181,37 +181,49 @@ Regarding performance, `cairosvg` is generally faster than `svglib` when it come
 Additionally, `cairosvg` offers various options for optimizing the rendering performance, such as disabling certain features, like fonts or filters.
 
 
+## Warning logs ##
+
+The `fpdf.svg` module produces `WARNING` log messages for **unsupported** SVG tags & attributes.
+If need be, you can suppress those logs:
+
+```python
+logging.getLogger("fpdf.svg").propagate = False
+```
+
 ## Supported SVG Features ##
 
-- groups
-- paths
-- basic shapes (rect, circle, ellipse, line, polyline, polygon)
-- basic cross-references
+- groups (`<g>`)
+- paths (`<path>`)
+- basic shapes (`<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`)
+- basic `<image>` elements
+- basic cross-references, with `defs` tags anywhere in the SVG code
 - stroke & fill coloring and opacity
 - basic stroke styling
-- Inline CSS styling via `style="..."` attributes.
+- inline CSS styling via `style="..."` attributes
 - clipping paths
-- `defs` tags anywhere in the SVG code
+
 
 ## Currently Unsupported Notable SVG Features ##
 
 Everything not listed as supported is unsupported, which is a lot. SVG is a
-ridiculously complex format that has become increasingly complex as it absorbs
-more of the entire browser rendering stack into its specification. However,
+very complex format that has become increasingly complex as it absorbs
+more of the entire browser rendering stack into its specification.
+
+However,
 there are some pretty commonly used features that are unsupported that may
 cause unexpected results (up to and including a normal-looking SVG rendering as
 a completely blank PDF). It is very likely that off-the-shelf SVGs will not be
 converted fully correctly without some preprocessing.
 
-In addition to that:
+There are some common SVG features that are currently **unsupported**, but that `fpdf2` could end up supporting with the help of contributors :
 
-- text/tspan/textPath
-- symbols
-- markers
-- patterns
-- gradients
-- a lot of attributes
-- embedded images or other content (including nested SVGs)
+- `<tspan>` / `<textPath>` / `<text>` (-> there is a starting [draft PR](https://github.com/py-pdf/fpdf2/pull/1029))
+- `<symbol>`
+- `<marker>`
+- `<pattern>`
+- gradients: `<linearGradient>` & `<radialGradient>`
+- embedded non-image content (including nested SVGs)
+- many standard attributes
 - CSS styling via `<style>` tags or external *.css files.
 
 {==

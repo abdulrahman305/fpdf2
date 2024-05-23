@@ -5,6 +5,7 @@ The contents of this module are internal to fpdf2, and not part of the public AP
 They may change at any time without prior warning or any deprecation period,
 in non-backward-compatible ways.
 """
+
 import gc, os, warnings
 from numbers import Number
 from tracemalloc import get_traced_memory, is_tracing
@@ -108,6 +109,33 @@ def convert_unit(
     if isinstance(to_convert, Iterable):
         return tuple(convert_unit(i, 1, unit_conversion_factor) for i in to_convert)
     return to_convert / unit_conversion_factor
+
+
+ROMAN_NUMERAL_MAP = (
+    ("M", 1000),
+    ("CM", 900),
+    ("D", 500),
+    ("CD", 400),
+    ("C", 100),
+    ("XC", 90),
+    ("L", 50),
+    ("XL", 40),
+    ("X", 10),
+    ("IX", 9),
+    ("V", 5),
+    ("IV", 4),
+    ("I", 1),
+)
+
+
+def int2roman(n):
+    "Convert an integer to Roman numeral"
+    result = ""
+    for numeral, integer in ROMAN_NUMERAL_MAP:
+        while n >= integer:
+            result += numeral
+            n -= integer
+    return result
 
 
 ################################################################################
