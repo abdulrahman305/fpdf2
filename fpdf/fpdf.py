@@ -116,6 +116,7 @@ from .svg import Percent, SVGObject
 from .syntax import DestinationXYZ, PDFArray, PDFDate
 from .table import Table, draw_box_borders
 from .text_region import TextRegionMixin, TextColumns
+from .unicode_script import UnicodeScript, get_unicode_script
 from .util import get_scale_factor, Padding
 
 # Public global variables:
@@ -236,6 +237,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
     MARKDOWN_LINK_REGEX = re.compile(r"^\[([^][]+)\]\(([^()]+)\)(.*)$", re.DOTALL)
     MARKDOWN_LINK_COLOR = None
     MARKDOWN_LINK_UNDERLINE = True
+    _GS_REGEX = re.compile(r"/(GS\d+) gs")
+    _IMG_REGEX = re.compile(r"/I(\d+) Do")
 
     HTML2FPDF_CLASS = HTML2FPDF
 
@@ -269,12 +272,22 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 stacklevel=get_stack_level(),
             )
         super().__init__()
+        self.single_resources_object = False
+        """
+        Setting this to True restore the old behaviour before 2.7.9.
+        Using a single /Resources object makes the resulting PDF document smaller,
+        but is less compatible with the PDF spec.
+        """
         self.page = 0  # current page number
         self.pages = {}  # array of PDFPage objects starting at index 1
         self.fonts = {}  # map font string keys to an instance of CoreFont or TTFFont
+        # map page numbers to a set of font indices:
+        self.fonts_used_per_page_number = defaultdict(set)
         self.links = {}  # array of Destination objects starting at index 1
         self.embedded_files = []  # array of PDFEmbeddedFile
         self.image_cache = ImageCache()
+        # map page numbers to a set of image indices
+        self.images_used_per_page_number = defaultdict(set)
         self.in_footer = False  # flag set while rendering footer
         # indicates that we are inside an .unbreakable() code block:
         self._in_unbreakable = False
@@ -315,9 +328,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self.font_stretching = 100  # current font stretching
         self.char_spacing = 0  # current character spacing
         self.underline = False  # underlining flag
-        self.current_font = (
-            None  # current font, None or an instance of CoreFont or TTFFont
-        )
+        self.current_font = None  # None or an instance of CoreFont or TTFFont
         self.draw_color = self.DEFAULT_DRAW_COLOR
         self.fill_color = self.DEFAULT_FILL_COLOR
         self.text_color = self.DEFAULT_TEXT_COLOR
@@ -351,6 +362,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
 
         self._current_draw_context = None
         self._drawing_graphics_state_registry = GraphicsStateDictRegistry()
+        # map page numbers to a set of GraphicsState names:
+        self.graphics_style_names_per_page_number = defaultdict(set)
 
         self._record_text_quad_points = False
 
@@ -1158,6 +1171,16 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         else:
             rendered = context.render(*render_args)
 
+        self.graphics_style_names_per_page_number[self.page].update(
+            match.group(1) for match in self._GS_REGEX.finditer(rendered)
+        )
+        # Registering raster images embedded in the vector graphics:
+        self.images_used_per_page_number[self.page].update(
+            int(match.group(1)) for match in self._IMG_REGEX.finditer(rendered)
+        )
+        # Once we handle text-rendering SVG tags (cf. PR #1029),
+        # we should also detect fonts used and add them to self.fonts_used_per_page_number
+
         self._out(rendered)
         # The drawing API makes use of features (notably transparency and blending modes) that were introduced in PDF 1.4:
         self._set_min_pdf_version("1.4")
@@ -1806,6 +1829,74 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             style,
         )
 
+    def bezier(self, point_list, closed=False, style=None):
+        """
+        Outputs a quadratic or cubic Bézier curve, defined by three or four coordinates.
+
+        Args:
+            point_list (list of tuples): List of Abscissa and Ordinate of
+                                        segments that should be drawn. Should be
+                                        three or four tuples. The first and last
+                                        points are the start and end point. The
+                                        middle point(s) are the control point(s).
+            closed (bool): True to draw the curve as a closed path, False (default)
+                                        for it to be drawn as an open path.
+            style (fpdf.enums.RenderStyle, str): Optional style of rendering. Allowed values are:
+            * `D` or None: draw border. This is the default value.
+            * `F`: fill
+            * `DF` or `FD`: draw and fill
+        """
+        points = len(point_list)
+        if points not in (3, 4):
+            raise ValueError(
+                "point_list should contain 3 tuples for a quadratic curve"
+                "or 4 tuples for a cubic curve."
+            )
+
+        if style is None:
+            style = RenderStyle.DF
+        else:
+            style = RenderStyle.coerce(style)
+
+        # QuadraticBezierCurve and BezierCurve make use of `initial_point` when instantiated.
+        # If we want to define all 3 (quad.) or 4 (cubic) points, we can set `initial_point`
+        # to be the first point given in `point_list` by creating a separate dummy path at that pos.
+        with self.drawing_context() as ctxt:
+            p1 = point_list[0]
+            x1, y1 = p1[0], p1[1]
+
+            dummy_path = PaintedPath(x1, y1)
+            ctxt.add_item(dummy_path)
+
+            p2 = point_list[1]
+            x2, y2 = p2[0], p2[1]
+
+            p3 = point_list[2]
+            x3, y3 = p3[0], p3[1]
+
+            if points == 4:
+                p4 = point_list[3]
+                x4, y4 = p4[0], p4[1]
+
+            path = PaintedPath(x1, y1)
+
+            # Translate enum style (RenderStyle) into rule (PathPaintRule)
+            rule = PathPaintRule.STROKE_FILL_NONZERO
+            if style.is_draw and not style.is_fill:
+                rule = PathPaintRule.STROKE
+            elif style.is_fill and not style.is_draw:
+                rule = PathPaintRule.FILL_NONZERO
+
+            path.style.paint_rule = rule
+            path.style.auto_close = closed
+
+            if points == 4:
+                path.curve_to(x2, y2, x3, y3, x4, y4)
+            elif points == 3:
+                path.curve_to(x2, y2, x2, y2, x3, y3)
+
+            ctxt.add_item(path)
+
     def add_font(self, family=None, style="", fname=None, uni="DEPRECATED"):
         """
         Imports a TrueType or OpenType font and makes it available
@@ -1958,6 +2049,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self.current_font = self.fonts[fontkey]
         if self.page > 0:
             self._out(f"BT /F{self.current_font.i} {self.font_size_pt:.2f} Tf ET")
+            self.fonts_used_per_page_number[self.page].add(self.current_font.i)
 
     def set_font_size(self, size):
         """
@@ -1975,6 +2067,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                     "Cannot set font size: a font must be selected first"
                 )
             self._out(f"BT /F{self.current_font.i} {self.font_size_pt:.2f} Tf ET")
+            self.fonts_used_per_page_number[self.page].add(self.current_font.i)
 
     def set_char_spacing(self, spacing):
         """
@@ -2304,6 +2397,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             flags=tuple(AnnotationFlag.coerce(flag) for flag in flags),
             default_appearance=f"({self.draw_color.serialize()} /F{self.current_font.i} {self.font_size_pt:.2f} Tf)",
         )
+        self.fonts_used_per_page_number[self.page].add(self.current_font.i)
         self.pages[self.page].annots.append(annotation)
         return annotation
 
@@ -2484,6 +2578,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         if self.text_mode != TextMode.FILL:
             sl.append(f" {self.text_mode} Tr {self.line_width:.2f} w")
         sl.append(f"{self.current_font.encode_text(text)} ET")
+        self.fonts_used_per_page_number[self.page].add(self.current_font.i)
         if (self.underline and text != "") or self._record_text_quad_points:
             w = self.get_string_width(text, normalized=True, markdown=False)
             if self.underline and text != "":
@@ -2720,6 +2815,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 raise ValueError(f"Unsupported setting: {key}")
         if gs:
             gs_name = self._drawing_graphics_state_registry.register_style(gs)
+            self.graphics_style_names_per_page_number[self.page].add(gs_name)
             self._out(f"q /{gs_name} gs")
         else:
             self._out("q")
@@ -3060,6 +3156,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                         current_font_size_pt = frag.font_size_pt
                     current_font = frag.font
                     sl.append(f"/F{frag.font.i} {frag.font_size_pt:.2f} Tf")
+                    if self.page > 0:
+                        self.fonts_used_per_page_number[self.page].add(current_font.i)
                 lift = frag.lift
                 if lift != current_lift:
                     # Use text rise operator:
@@ -3282,7 +3380,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
 
     def _parse_chars(self, text: str, markdown: bool) -> Iterator[Fragment]:
         "Split text into fragments"
-        if not markdown and (not self.is_ttf_font or not self._fallback_font_ids):
+        if not markdown and not self.is_ttf_font:
             yield Fragment(text, self._get_current_graphics_state(), self.k)
             return
         txt_frag, in_bold, in_italics, in_underline = (
@@ -3292,9 +3390,10 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             bool(self.underline),
         )
         current_fallback_font = None
+        current_text_script = None
 
         def frag():
-            nonlocal txt_frag, current_fallback_font
+            nonlocal txt_frag, current_fallback_font, current_text_script
             gstate = self._get_current_graphics_state()
             gstate["font_style"] = ("B" if in_bold else "") + (
                 "I" if in_italics else ""
@@ -3309,6 +3408,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 )
                 gstate["current_font"] = self.fonts[current_fallback_font]
                 current_fallback_font = None
+                current_text_script = None
             fragment = Fragment(
                 txt_frag,
                 gstate,
@@ -3329,6 +3429,16 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 self.MARKDOWN_UNDERLINE_MARKER,
             )
             half_marker = text[0]
+            text_script = get_unicode_script(text[0])
+            if text_script not in (
+                UnicodeScript.COMMON,
+                UnicodeScript.UNKNOWN,
+                current_text_script,
+            ):
+                if txt_frag and current_text_script:
+                    yield frag()
+                current_text_script = text_script
+
             # Check that previous & next characters are not identical to the marker:
             if markdown:
                 if (
@@ -3401,9 +3511,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         Returns: a boolean indicating if a page break would occur
         """
         return (
-            # ensure that there is already some content on the page:
-            self.y > self.t_margin
-            and self.y + height > self.page_break_trigger
+            self.y + height > self.page_break_trigger
             and not self.in_footer
             and self.accept_page_break
         )
@@ -3992,6 +4100,9 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 while preserving its original aspect ratio. Defaults to False.
                 Only meaningful if both `w` & `h` are provided.
 
+        If `y` is provided, this method will not trigger any page break;
+        otherwise, auto page break detection will be performed.
+
         Returns: an instance of a subclass of `ImageInfo`.
         """
         if type:
@@ -4071,6 +4182,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         if link:
             self.link(x, y, w, h, link)
 
+        self.images_used_per_page_number[self.page].add(info["i"])
         return RasterImageInfo(**info, rendered_width=w, rendered_height=h)
 
     def _vector_image(
@@ -4191,6 +4303,10 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                     round(height_in_pt * self.oversized_images_ratio),
                 )
                 info["usages"] -= 1  # no need to embed the high-resolution image
+                if info["usages"] == 0:
+                    for images_used in self.images_used_per_page_number.values():
+                        if info["i"] in images_used:
+                            images_used.remove(info["i"])
                 if lowres_info:  # Great, we've already done the job!
                     info = lowres_info
                     if info["w"] * info["h"] < dims[0] * dims[1]:
@@ -5029,6 +5145,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 DeprecationWarning,
                 stacklevel=get_stack_level(),
             )
+        # Clear cache of cached functions to free up memory after output
+        get_unicode_script.cache_clear()
         # Finish document if necessary:
         if not self.buffer:
             if self.page == 0:
