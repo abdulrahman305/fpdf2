@@ -41,7 +41,7 @@ Go try it **now** online in a Jupyter notebook: [![Open In Colab](https://colab.
 * It has very few dependencies: [Pillow](https://pillow.readthedocs.io/en/stable/), [defusedxml](https://pypi.org/project/defusedxml/), & [fonttools](https://pypi.org/project/fonttools/)
 * Can render [mathematical equations & charts](https://py-pdf.github.io/fpdf2/Maths.html)
 * Many example scripts available throughout this documentation, including usage examples with [Django](https://www.djangoproject.com/), [Flask](https://flask.palletsprojects.com), [FastAPI](https://fastapi.tiangolo.com/), [streamlit](https://streamlit.io/), AWS lambdas... : [Usage in web APIs](UsageInWebAPI.md)
-* Unit tests with `qpdf`-based PDF diffing, and PDF samples validation using 3 different checkers:
+* more than 1300 unit tests with `qpdf`-based PDF diffing, and PDF samples validation using 3 different checkers:
 
 [![QPDF logo](qpdf-logo.svg)](https://github.com/qpdf/qpdf)
 [![PDF Checker logo](pdfchecker-logo.png)](https://www.datalogics.com/products/pdf-tools/pdf-checker/)
@@ -65,6 +65,7 @@ Go try it **now** online in a Jupyter notebook: [![Open In Colab](https://colab.
 * [日本語](Tutorial-ja.md)
 * [Dutch](Tutorial-nl.md)
 * [Polski](Tutorial-pl.md)
+* [Türkçe](Tutorial-tr.md)
 
 ## Installation ##
 
@@ -109,6 +110,7 @@ or [open a discussion](https://github.com/py-pdf/fpdf2/discussions).
   `fpdf2` also has a demo script to convert a GIF into a one-page-per-frame PDF: [gif2pdf.py](https://github.com/py-pdf/fpdf2/blob/master/tutorial/gif2pdf.py)
 * [csv2pdf](https://github.com/TECH-SAVVY-GUY/csv2pdf) : convert CSV files to PDF files easily
 * [Planet-Matriarchy-RPG-CharGen](https://github.com/ShawnDriscoll/Planet-Matriarchy-RPG-CharGen) : a PyQt based desktop application (= `.exe` under Windows) that provides a RPG character sheet generator
+* [Petleo GMBH](https://petleo.net) :  a software company that offers digital solutions for veterinarians, pet owners and pet service providers.
 
 ### Usage statistics
 
