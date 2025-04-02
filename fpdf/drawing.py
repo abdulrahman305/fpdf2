@@ -8,6 +8,7 @@ in non-backward-compatible ways.
 
 import copy, decimal, math, re
 from collections import OrderedDict
+
 from collections.abc import Sequence
 from contextlib import contextmanager
 from typing import Optional, NamedTuple, Union
@@ -4047,11 +4048,10 @@ class GraphicsContext:
                     val = getattr(merged_style, attr)
                     if val is not merged_style.INHERIT:
                         if getattr(self.style, attr) is merged_style.INHERIT:
-                            inh = " (inherited)"
+                            inherited = " (inherited)"
                         else:
-                            inh = ""
-
-                        styles_dbg.append(f"{attr}: {val}{inh}")
+                            inherited = ""
+                        styles_dbg.append(f"{attr}: {val}{inherited}")
 
                 if styles_dbg:
                     debug_stream.write(" {\n")

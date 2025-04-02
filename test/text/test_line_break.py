@@ -11,9 +11,9 @@ class FxFragment(Fragment):
     The value of each style is a dict of characters and widths.
     """
 
-    def __init__(self, wdict, *args, **kwargs):
+    def __init__(self, characters, graphics_state, k, link, wdict=None):
         self.wdict = wdict
-        super().__init__(*args, **kwargs)
+        super().__init__(characters, graphics_state, k, link)
 
     def get_character_width(self, character, print_sh=False, initial_cs=True):
         """Return the relevant width from "wdict"."""
@@ -180,7 +180,7 @@ def test_width_calculation():
     alphabet["normal"][" "] = char_width
     gs = _gs_normal
     gs["current_font"] = FxFont(alphabet["normal"])
-    fragments = [FxFragment(alphabet, text, gs, 1)]
+    fragments = [FxFragment(text, gs, 1, None, alphabet)]
     multi_line_break = MultiLineBreak(fragments, _get_width, [0, 0])
 
     # zero width returns empty line
@@ -239,7 +239,7 @@ def test_single_space_in_fragment():
     }
     gs = _gs_normal
     gs["current_font"] = FxFont(alphabet["normal"])
-    fragments = [FxFragment(alphabet, text, gs, 1)]
+    fragments = [FxFragment(text, gs, 1, None, alphabet)]
     for char in text:
         alphabet["normal"][char] = char_width
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
@@ -275,7 +275,9 @@ def test_single_soft_hyphen_in_fragment():
     for char in text:
         alphabet["normal"][char] = char_width
     fragments = [
-        FxFragment(alphabet, text, gs_with_font(_gs_normal, alphabet["normal"]), 1)
+        FxFragment(
+            text, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
+        )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
     res = multi_line_break.get_line()
@@ -299,7 +301,9 @@ def test_single_hard_hyphen_in_fragment():
     for char in text:
         alphabet["normal"][char] = char_width
     fragments = [
-        FxFragment(alphabet, text, gs_with_font(_gs_normal, alphabet["normal"]), 1)
+        FxFragment(
+            text, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
+        )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
     res = multi_line_break.get_line()
@@ -332,10 +336,11 @@ def test_real_hyphen_acts_differently_from_soft_hyphen():
     soft_hyphen_line_break = MultiLineBreak(
         [
             FxFragment(
-                alphabet,
                 words_separated_by_soft_hyphen,
                 gs_with_font(_gs_normal, alphabet["normal"]),
                 1,
+                None,
+                alphabet,
             )
         ],
         test_width,
@@ -344,10 +349,11 @@ def test_real_hyphen_acts_differently_from_soft_hyphen():
     hard_hyphen_line_break = MultiLineBreak(
         [
             FxFragment(
-                alphabet,
                 words_separated_by_hard_hyphen,
                 gs_with_font(_gs_normal, alphabet["normal"]),
                 1,
+                None,
+                alphabet,
             )
         ],
         test_width,
@@ -365,7 +371,7 @@ def test_trailing_soft_hyphen():
     """
     fit one word and trailing soft-hyphen into the line with extremely large width.
     expected behavior ->
-        - first call to `get_line` cointains the word.
+        - first call to `get_line` contains the word.
           soft hyphen is not included in the line.
         - second call to `get_line` is None because there is no
             text left.
@@ -380,7 +386,9 @@ def test_trailing_soft_hyphen():
     for char in text:
         alphabet["normal"][char] = char_width
     fragments = [
-        FxFragment(alphabet, text, gs_with_font(_gs_normal, alphabet["normal"]), 1)
+        FxFragment(
+            text, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
+        )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
     res = multi_line_break.get_line()
@@ -403,7 +411,7 @@ def test_trailing_whitespace():
     """
     fit one word and trailing whitespace into the line with extremely large width.
     expected behavior ->
-        - first call to `get_line` cointains the word and the space.
+        - first call to `get_line` contains the word and the space.
         - second call to `get_line` is None because there is no
             text left.
     """
@@ -417,7 +425,9 @@ def test_trailing_whitespace():
     for char in text:
         alphabet["normal"][char] = char_width
     fragments = [
-        FxFragment(alphabet, text, gs_with_font(_gs_normal, alphabet["normal"]), 1)
+        FxFragment(
+            text, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
+        )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
     res = multi_line_break.get_line()
@@ -440,7 +450,7 @@ def test_two_words_one_line():
     """
     fit two words into the line with extremely large width.
     expected behavior ->
-        - first call to `get_line` cointains all words.
+        - first call to `get_line` contains all words.
         - second call to `get_line` is None because there is no
             text left.
     """
@@ -454,7 +464,9 @@ def test_two_words_one_line():
     for char in text:
         alphabet["normal"][char] = char_width
     fragments = [
-        FxFragment(alphabet, text, gs_with_font(_gs_normal, alphabet["normal"]), 1)
+        FxFragment(
+            text, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
+        )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
     res = multi_line_break.get_line()
@@ -477,7 +489,7 @@ def test_two_words_one_line_justify():
     """
     fit two words into the line with extremely large width.
     expected behavior ->
-        - first call to `get_line` cointains all words.
+        - first call to `get_line` contains all words.
             this line is expected to be unjustified, because it is the last
             line.
         - second call to `get_line` is None because there is no
@@ -493,7 +505,9 @@ def test_two_words_one_line_justify():
     for char in text:
         alphabet["normal"][char] = char_width
     fragments = [
-        FxFragment(alphabet, text, gs_with_font(_gs_normal, alphabet["normal"]), 1)
+        FxFragment(
+            text, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
+        )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0], align=Align.J)
     res = multi_line_break.get_line()
@@ -516,8 +530,8 @@ def test_two_words_two_lines_break_by_space():
     """
     fit two words into the line that can fit only one word.
     expected behavior:
-        - first call to `get_line` cointains the first word.
-        - second call to `get_line` cointains the second word.
+        - first call to `get_line` contains the first word.
+        - second call to `get_line` contains the second word.
         - third call to `get_line` is None because there is no
             text left.
     """
@@ -530,7 +544,9 @@ def test_two_words_two_lines_break_by_space():
     for char in text:
         alphabet["normal"][char] = char_width
     fragments = [
-        FxFragment(alphabet, text, gs_with_font(_gs_normal, alphabet["normal"]), 1)
+        FxFragment(
+            text, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
+        )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
     res = multi_line_break.get_line()
@@ -564,10 +580,10 @@ def test_two_words_two_lines_break_by_space_justify():
     """
     fit two words into the line that can fit only one word.
     expected behavior:
-        - first call to `get_line` cointains the first word.
+        - first call to `get_line` contains the first word.
             Line is expected to be unjustified, because there are no spaces in
             the line.
-        - second call to `get_line` cointains the second word.
+        - second call to `get_line` contains the second word.
             Line is expected to be unjustified, because it is the last line.
         - third call to `get_line` is None because there is no
             text left.
@@ -580,7 +596,7 @@ def test_two_words_two_lines_break_by_space_justify():
     }
     for char in text:
         alphabet["normal"][char] = char_width
-    fragments = [FxFragment(alphabet, text, _gs_normal, 1)]
+    fragments = [FxFragment(text, _gs_normal, 1, None, alphabet)]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
 
     res = multi_line_break.get_line()
@@ -614,8 +630,8 @@ def test_four_words_two_lines_break_by_space():
     """
     fit two words into the line that can fit only one word.
     expected behavior:
-        - first call to `get_line` cointains the first two words.
-        - second call to `get_line` cointains the second two words.
+        - first call to `get_line` contains the first two words.
+        - second call to `get_line` contains the second two words.
         - third call to `get_line` is None because there is no
             text left.
     """
@@ -630,7 +646,7 @@ def test_four_words_two_lines_break_by_space():
     }
     for char in text:
         alphabet["normal"][char] = char_width
-    fragments = [FxFragment(alphabet, text, _gs_normal, 1)]
+    fragments = [FxFragment(text, _gs_normal, 1, None, alphabet)]
     multi_line_break = MultiLineBreak(fragments, test_width_A, [0, 0])
     res = multi_line_break.get_line()
     exp = TextLine(
@@ -663,9 +679,9 @@ def test_four_words_two_lines_break_by_space_justify():
     """
     fit two words into the line that can fit only one word.
     expected behavior:
-        - first call to `get_line` cointains the first two words.
+        - first call to `get_line` contains the first two words.
             Line is expected to be justified.
-        - second call to `get_line` cointains the second two words.
+        - second call to `get_line` contains the second two words.
             Line is expected to be unjustified, because it is the last line.
         - third call to `get_line` is None because there is no
             text left.
@@ -681,7 +697,7 @@ def test_four_words_two_lines_break_by_space_justify():
     }
     for char in text:
         alphabet["normal"][char] = char_width
-    fragments = [FxFragment(alphabet, text, _gs_normal, 1)]
+    fragments = [FxFragment(text, _gs_normal, 1, None, alphabet)]
     multi_line_break = MultiLineBreak(fragments, test_width_A, [0, 0], align=Align.J)
     res = multi_line_break.get_line()
     exp = TextLine(
@@ -736,13 +752,25 @@ def test_break_fragment_into_two_lines():
 
     fragments = [
         FxFragment(
-            alphabet, first_line_text, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            first_line_text,
+            gs_with_font(_gs_normal, alphabet["normal"]),
+            1,
+            None,
+            alphabet,
         ),
         FxFragment(
-            alphabet, second_line_text, gs_with_font(_gs_bold, alphabet["bold"]), 1
+            second_line_text,
+            gs_with_font(_gs_bold, alphabet["bold"]),
+            1,
+            None,
+            alphabet,
         ),
         FxFragment(
-            alphabet, third_line_text, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            third_line_text,
+            gs_with_font(_gs_normal, alphabet["normal"]),
+            1,
+            None,
+            alphabet,
         ),
     ]
 
@@ -809,13 +837,25 @@ def test_break_fragment_into_two_lines_justify():
 
     fragments = [
         FxFragment(
-            alphabet, first_line_text, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            first_line_text,
+            gs_with_font(_gs_normal, alphabet["normal"]),
+            1,
+            None,
+            alphabet,
         ),
         FxFragment(
-            alphabet, second_line_text, gs_with_font(_gs_bold, alphabet["bold"]), 1
+            second_line_text,
+            gs_with_font(_gs_bold, alphabet["bold"]),
+            1,
+            None,
+            alphabet,
         ),
         FxFragment(
-            alphabet, third_line_text, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            third_line_text,
+            gs_with_font(_gs_normal, alphabet["normal"]),
+            1,
+            None,
+            alphabet,
         ),
     ]
 
@@ -876,7 +916,7 @@ def test_soft_hyphen_break():
 
     fragments = [
         FxFragment(
-            alphabet, long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
         )
     ]
 
@@ -999,7 +1039,7 @@ def test_soft_hyphen_break_justify():
         alphabet["normal"][char] = char_width
     fragments = [
         FxFragment(
-            alphabet, long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
         )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0], align=Align.J)
@@ -1061,7 +1101,7 @@ def test_explicit_break():
         alphabet["normal"][char] = char_width
     fragments = [
         FxFragment(
-            alphabet, long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
         )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
@@ -1131,7 +1171,7 @@ def test_explicit_break_justify():
         alphabet["normal"][char] = char_width
     fragments = [
         FxFragment(
-            alphabet, long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
         )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0], align=Align.J)
@@ -1202,7 +1242,7 @@ def test_single_word_doesnt_fit_into_width():
         alphabet["normal"][char] = char_width
     fragments = [
         FxFragment(
-            alphabet, long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
         )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0])
@@ -1275,7 +1315,7 @@ def test_single_word_doesnt_fit_into_width_justify():
         alphabet["normal"][char] = char_width
     fragments = [
         FxFragment(
-            alphabet, long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
         )
     ]
     multi_line_break = MultiLineBreak(fragments, test_width, [0, 0], align=Align.J)
@@ -1338,7 +1378,7 @@ def test_last_line_no_justify():
         alphabet["normal"][char] = char_width
     fragments = [
         FxFragment(
-            alphabet, long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1
+            long_string, gs_with_font(_gs_normal, alphabet["normal"]), 1, None, alphabet
         )
     ]
 
@@ -1384,7 +1424,7 @@ def test_line_break_no_initial_newline():  # issue-847
     text = "X" * 50
     alphabet = {"normal": {}}
     alphabet["normal"]["X"] = 4.7
-    fragments = [FxFragment(alphabet, text, _gs_normal, 1)]
+    fragments = [FxFragment(text, _gs_normal, 1, None, alphabet)]
     multi_line_break = MultiLineBreak(fragments, 188, [0, 0])
     text_line = multi_line_break.get_line()
     assert text_line.fragments

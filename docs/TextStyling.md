@@ -6,8 +6,10 @@ Setting emphasis on text can be controlled by using `.set_font(style=...)`:
 
 * `style="B"` indicates **bold**
 * `style="I"` indicates _italics_
+* `style="S"` indicates <s>strikethrough</s>
 * `style="U"` indicates <u>underline</u>
-* `style="BI"` indicates _**bold italics**_
+
+Letters can be combined, for example: `style="BI"` indicates _**bold italics**_
 
 ```python
 from fpdf import FPDF
@@ -35,7 +37,7 @@ The example shows the same text justified to the same width, with stretching val
 ```python
 pdf = FPDF()
 pdf.add_page()
-pdf.set_font("Helvetica", "", 8)
+pdf.set_font("Helvetica", size=8)
 pdf.set_fill_color(255, 255, 0)
 pdf.multi_cell(w=50, text=LOREM_IPSUM[:100], new_x="LEFT", fill=True)
 pdf.ln()
@@ -51,13 +53,13 @@ This method changes the distance between individual characters of a test string.
 
 Character spacing works best for formatting single line text created by any method, or for highlighting individual words included in a block of text with `.write()`.
 
-**Limitations**: Spacing will only be changed *within* a sequence of characters that `fpdf2` adds to the PDF in one go. This means that there will be no extra distance _eg._ between text parts that are placed successivly with `write()`. Also, if you apply different font styles using the Markdown functionality of `.cell()` and `.multi_cell()` or by using `html_write()`, then any parts given different styles will have the original distance between them. This is so because `fpdf2` has to add each styled fragment to the PDF file seperately.
+**Limitations**: Spacing will only be changed *within* a sequence of characters that `fpdf2` adds to the PDF in one go. This means that there will be no extra distance _eg._ between text parts that are placed successively with `write()`. Also, if you apply different font styles using the Markdown functionality of `.cell()` and `.multi_cell()` or by using `html_write()`, then any parts given different styles will have the original distance between them. This is so because `fpdf2` has to add each styled fragment to the PDF file separately.
 
 The example shows the same text justified to the same width, with char_spacing values of 0 and 10 (font size 8 pt).
 ```python
 pdf = FPDF()
 pdf.add_page()
-pdf.set_font("Helvetica", "", 8)
+pdf.set_font("Helvetica", size=8)
 pdf.set_fill_color(255, 255, 0)
 pdf.multi_cell(w=150, text=LOREM_IPSUM[:200], new_x="LEFT", fill=True)
 pdf.ln()
@@ -68,7 +70,7 @@ pdf.multi_cell(w=150, text=LOREM_IPSUM[:200], new_x="LEFT", fill=True)
 
 For a more complete support of **Markdown** syntax,
 check out this guide to combine `fpdf2` with the `mistletoe` library:
-[Combine with mistletoe to use Markdown](CombineWithMistletoeoToUseMarkdown.md).
+[Combine with Markdown](CombineWithMarkdown.md).
 
 
 ## Subscript, Superscript, and Fractional Numbers
@@ -109,7 +111,7 @@ The example shows the most common use cases:
 ```python
     pdf = fpdf.FPDF()
     pdf.add_page()
-    pdf.set_font("Helvetica", "", 20)
+    pdf.set_font("Helvetica", size=20)
     pdf.write(text="2")
     pdf.char_vpos = "SUP"
     pdf.write(text="56")
@@ -140,9 +142,9 @@ The PDF spec defines several text modes:
 
 The text mode can be controlled with the `.text_mode` attribute.
 With `STROKE` modes, the line width is induced by `.line_width`,
-and its color can be configured with [`set_draw_color()`](fpdf/fpdf.html#fpdf.fpdf.FPDF.set_draw_color).
-With `FILL` modes, the filling color can be controlled by [`set_fill_color()`](fpdf/fpdf.html#fpdf.fpdf.FPDF.set_fill_color)
-or [`set_text_color()`](fpdf/fpdf.html#fpdf.fpdf.FPDF.set_text_color).
+and its color can be configured with [`set_draw_color()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.set_draw_color).
+With `FILL` modes, the filling color can be controlled by [`set_fill_color()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.set_fill_color)
+or [`set_text_color()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.set_text_color).
 
 With any of the 4 `CLIP` modes, the letters will be filled by vector drawings made afterwards,
 as can be seen in this example:
@@ -163,7 +165,7 @@ pdf.ln()
 with pdf.local_context(text_mode="CLIP"):
     pdf.cell(text="CLIP text mode")
     for r in range(0, 250, 2):  # drawing concentric circles
-        pdf.circle(x=130-r/2, y=70-r/2, r=r)
+        pdf.circle(x=130-r/2, y=70-r/2, radius=r)
 
 pdf.output("text-modes.pdf")
 ```
@@ -177,8 +179,8 @@ More examples from [`test_text_mode.py`](https://github.com/py-pdf/fpdf2/blob/ma
 
 ## markdown=True ##
 
-An optional `markdown=True` parameter can be passed to the [`cell()`](fpdf/fpdf.html#fpdf.fpdf.FPDF.cell)
-& [`multi_cell()`](fpdf/fpdf.html#fpdf.fpdf.FPDF.multi_cell) methods
+An optional `markdown=True` parameter can be passed to the [`cell()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.cell)
+& [`multi_cell()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.multi_cell) methods
 in order to enable basic Markdown-like styling: `**bold**, __italics__, --underlined--`.
 
 If the printable text contains a character sequence that would be incorrectly interpreted as a formatting marker, it can be escaped using `\`. The escape character works the same way it generally does in Python (see the example below).

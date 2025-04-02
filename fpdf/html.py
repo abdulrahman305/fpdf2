@@ -21,7 +21,7 @@ from .util import get_scale_factor, int2roman
 LOGGER = logging.getLogger(__name__)
 BULLET_WIN1252 = "\x95"  # BULLET character in Windows-1252 encoding
 DEGREE_WIN1252 = "\xb0"
-HEADING_TAGS = ("h1", "h2", "h3", "h4", "h5", "h6")
+HEADING_TAGS = ("title", "h1", "h2", "h3", "h4", "h5", "h6")
 # Some of the margin values below are fractions, in order to be fully backward-compatible,
 # and due to the _scale_units() conversion performed in HTML2FPDF constructor below.
 # Those constants are formatted as Mixed Fractions, a mathematical representation
@@ -31,9 +31,11 @@ DEFAULT_TAG_STYLES = {
     "a": FontFace(color="#00f", emphasis="UNDERLINE"),
     "b": FontFace(emphasis="BOLD"),
     "code": FontFace(family="Courier"),
+    "del": FontFace(emphasis="STRIKETHROUGH"),
     "em": FontFace(emphasis="ITALICS"),
     "font": FontFace(),
     "i": FontFace(emphasis="ITALICS"),
+    "s": FontFace(emphasis="STRIKETHROUGH"),
     "strong": FontFace(emphasis="BOLD"),
     "u": FontFace(emphasis="UNDERLINE"),
     # Block tags are TextStyle instances :
@@ -41,6 +43,12 @@ DEFAULT_TAG_STYLES = {
     "center": TextStyle(t_margin=4 + 7 / 30),
     "dd": TextStyle(l_margin=10),
     "dt": TextStyle(font_style="B", t_margin=4 + 7 / 30),
+    "title": TextStyle(  # Only rendered if render_title_tag=True
+        b_margin=0.4,
+        font_size_pt=30,
+        t_margin=6,
+        l_margin="Center",
+    ),
     "h1": TextStyle(
         color="#960000", b_margin=0.4, font_size_pt=24, t_margin=5 + 834 / 900
     ),
@@ -65,7 +73,7 @@ DEFAULT_TAG_STYLES = {
     "ol": TextStyle(t_margin=2),
     "ul": TextStyle(t_margin=2),
 }
-INLINE_TAGS = ("a", "b", "code", "em", "font", "i", "strong", "u")
+INLINE_TAGS = ("a", "b", "code", "del", "em", "font", "i", "s", "strong", "u")
 BLOCK_TAGS = HEADING_TAGS + (
     "blockquote",
     "center",
@@ -279,7 +287,7 @@ def color_as_decimal(color="#000000"):
         return None
     # Checks if color is a name and gets the hex value
     hexcolor = COLOR_DICT.get(color.lower(), color)
-    return color_from_hex_string(hexcolor).colors255
+    return color_from_hex_string(hexcolor)
 
 
 def parse_css_style(style_attr):
@@ -316,6 +324,7 @@ class HTML2FPDF(HTMLParser):
         tag_indents=None,
         tag_styles=None,
         font_family="times",
+        render_title_tag=False,
     ):
         """
         Args:
@@ -335,10 +344,11 @@ class HTML2FPDF(HTMLParser):
             pre_code_font (str): [**DEPRECATED since v2.7.9**]
                 font to use for `<pre>` & `<code>` blocks - Set `tag_styles` instead
             warn_on_tags_not_matching (bool): control warnings production for unmatched HTML tags. Defaults to `True`.
-            tag_indents (dict): [**DEPRECATED since v2.7.10**]
-                mapping of HTML tag names to numeric values representing their horizontal left identation. - Set `tag_styles` instead
+            tag_indents (dict): [**DEPRECATED since v2.8.0**]
+                mapping of HTML tag names to numeric values representing their horizontal left indentation. - Set `tag_styles` instead
             tag_styles (dict[str, fpdf.fonts.TextStyle]): mapping of HTML tag names to `fpdf.TextStyle` or `fpdf.FontFace` instances
             font_family (str): optional font family. Default to Times.
+            render_title_tag (bool): Render the document <title> at the beginning of the PDF. Default to False.
         """
         super().__init__()
         self.pdf = pdf
@@ -347,22 +357,24 @@ class HTML2FPDF(HTMLParser):
         self.li_prefix_color = (
             color_as_decimal(li_prefix_color)
             if isinstance(li_prefix_color, str)
-            else convert_to_device_color(li_prefix_color).colors255
+            else convert_to_device_color(li_prefix_color)
         )
         self.warn_on_tags_not_matching = warn_on_tags_not_matching
-
-        # We operate in a local context and will only temporarily switch to the outer one for rendering.
-        # This is necessary because of the deferred execution of text region writes. Changing fonts and
-        # colors in here must not affect the output and/or interfere with the settings during rendering.
-        # The TOC gets rendered outside of our scope, so we need to set a font first, in order to
-        # ensure that the TOC has one available.
-        # If a font was defined previously, we reinstate that seperately after we're finished here.
-        # In this case the TOC will be rendered with that font and not ours. But adding a TOC tag only
-        # makes sense if the whole document gets converted from HTML, so this should be acceptable.
+        # The following 4 attributes are there to serve as "temporary state",
+        # so that changes to those settings are saved,
+        # but not reflected onto self.pdf yet,
+        # and only "effectively" applied when self._write_paragraph() is called.
+        # This way, we often avoid useless operators in the PDF content stream.
         self.font_family = pdf.font_family or font_family
         self.font_size_pt = pdf.font_size_pt
-        self.set_font(
-            family=self.font_family, emphasis=TextEmphasis.NONE, set_default=True
+        self.font_emphasis = TextEmphasis.NONE
+        self.font_color = pdf.text_color
+        # For historical / backward-compatibility reasons,
+        # write_html() sets an active font (Times by default):
+        self.pdf.set_font(
+            family=self.font_family,
+            size=self.font_size_pt,
+            style=self.font_emphasis.style,
         )
         self.style_stack = []  # list of FontFace
         self.h = pdf.font_size_pt / pdf.k
@@ -378,11 +390,13 @@ class HTML2FPDF(HTMLParser):
         self.line_height_stack = []
         self.ol_type = []  # when inside a <ol> tag, can be "a", "A", "i", "I" or "1"
         self.bullet = []
-        self.font_color = pdf.text_color.colors255
         self.heading_level = None
         self._tags_stack = []
         self._column = self.pdf.text_columns(skip_leading_spaces=True)
         self._paragraph = self._column.paragraph()
+        # <title>-related properties:
+        self.render_title_tag = render_title_tag
+        self._in_title = False
         # <table>-related properties:
         self.table_line_separators = table_line_separators
         self.table = None  # becomes a Table instance when processing <table> tags
@@ -475,7 +489,7 @@ class HTML2FPDF(HTMLParser):
         if tag_indents:
             warnings.warn(
                 (
-                    "The tag_indents parameter is deprecated since v2.7.10 "
+                    "The tag_indents parameter is deprecated since v2.8.0 "
                     "and will be removed in a future release. "
                     "Set the `tag_styles` parameter instead."
                 ),
@@ -502,10 +516,15 @@ class HTML2FPDF(HTMLParser):
         # due to the behaviour of TextRegion._render_column_lines()
         self._end_paragraph()
         self.align = align or ""
+        if isinstance(indent, Align):
+            # Explicit alignment takes priority over alignment provided as TextStyle.l_margin:
+            if not self.align:
+                self.align = indent
+            indent = 0
         if not top_margin and not self.follows_heading:
             top_margin = self.font_size_pt / self.pdf.k
         self._paragraph = self._column.paragraph(
-            text_align=align,
+            text_align=self.align,
             line_height=line_height,
             skip_leading_spaces=True,
             top_margin=top_margin,
@@ -518,22 +537,41 @@ class HTML2FPDF(HTMLParser):
 
     def _end_paragraph(self):
         self.align = ""
-        if self._paragraph:
-            self._column.end_paragraph()
-            self._column.render()
-            self._paragraph = None
-            self.follows_trailing_space = True
-            if self._page_break_after_paragraph:
-                # pylint: disable=protected-access
-                self.pdf._perform_page_break()
-                self._page_break_after_paragraph = False
+        if not self._paragraph:
+            return
+        self._column.end_paragraph()
+        self._column.render()
+        self._paragraph = None
+        self.follows_trailing_space = True
+        if self._page_break_after_paragraph:
+            # pylint: disable=protected-access
+            self.pdf._perform_page_break()
+            self._page_break_after_paragraph = False
 
     def _write_paragraph(self, text, link=None):
         if not text:
             return
         if not self._paragraph:
             self._new_paragraph()
+        # The following local stack is required
+        # in order for FPDF._get_current_graphics_state()
+        # to properly capture the current graphics state,
+        # and then to be able to drop those temporary changes,
+        # because they will only be "effectively" applied in .end_paragraph().
+        # pylint: disable=protected-access
+        self.pdf._push_local_stack()
+        prev_page = self.pdf.page
+        self.pdf.page = 0
+        self.pdf.set_font(
+            family=self.font_family,
+            size=self.font_size_pt,
+            style=self.font_emphasis.style,
+        )
+        if self.font_color != self.pdf.text_color:
+            self.pdf.set_text_color(self.font_color)
         self._paragraph.write(text, link=link)
+        self.pdf.page = prev_page
+        self.pdf._pop_local_stack()
 
     def _ln(self, h=None):
         if self._paragraph:
@@ -543,6 +581,13 @@ class HTML2FPDF(HTMLParser):
         self.follows_trailing_space = True
 
     def handle_data(self, data):
+        if self._in_title:
+            if self.pdf.title:
+                LOGGER.warning('Ignoring repeated <title> "%s"', data)
+            else:
+                self.pdf.set_title(data)
+            if not self.render_title_tag:
+                return
         if self.td_th is not None:
             data = data.strip()
             if not data:
@@ -590,7 +635,7 @@ class HTML2FPDF(HTMLParser):
             # ignore anything else than td inside a table
             pass
         elif self._pre_formatted:  # pre blocks
-            # If we want to mimick the exact HTML semantics about newlines at the
+            # If we want to mimic the exact HTML semantics about newlines at the
             # beginning and end of the block, then this needs some more thought.
             if data.startswith("\n") and self._pre_started:
                 if data.endswith("\n"):
@@ -662,6 +707,14 @@ class HTML2FPDF(HTMLParser):
             )
             self._write_paragraph("\n")
         if tag == "p":
+            self.style_stack.append(
+                FontFace(
+                    family=self.font_family,
+                    emphasis=self.font_emphasis,
+                    size_pt=self.font_size_pt,
+                    color=self.font_color,
+                )
+            )
             align = None
             if "align" in attrs:
                 align = attrs.get("align")[0].upper()
@@ -689,12 +742,12 @@ class HTML2FPDF(HTMLParser):
             self.style_stack.append(
                 FontFace(
                     family=self.font_family,
-                    emphasis=self.pdf.emphasis,
+                    emphasis=self.font_emphasis,
                     size_pt=self.font_size_pt,
                     color=self.font_color,
                 )
             )
-            self.heading_level = int(tag[1:])
+            self.heading_level = 0 if tag == "title" else int(tag[1:])
             tag_style = self.tag_styles[tag]
             hsize = (tag_style.size_pt or self.font_size_pt) / self.pdf.k
             if attrs:
@@ -709,32 +762,30 @@ class HTML2FPDF(HTMLParser):
                 bottom_margin=tag_style.b_margin * hsize,
                 indent=tag_style.l_margin,
             )
-            color = None
             if "color" in css_style:
-                color = color_as_decimal(css_style["color"])
+                self.font_color = color_as_decimal(css_style["color"])
             elif "color" in attrs:
                 # "color" attributes are not valid in HTML,
                 # but we support it for backward compatibility:
-                color = color_as_decimal(attrs["color"])
+                self.font_color = color_as_decimal(attrs["color"])
             elif tag_style.color:
-                color = tag_style.color.colors255
-            if color:
-                self.set_text_color(*color)
-            self.set_font(
-                family=tag_style.family or self.font_family,
-                size=tag_style.size_pt or self.font_size_pt,
-                extra_emphasis=tag_style.emphasis,
-            )
+                self.font_color = tag_style.color
+            self.font_family = tag_style.family or self.font_family
+            self.font_size_pt = tag_style.size_pt or self.font_size_pt
+            if tag_style.emphasis:
+                self.font_emphasis |= tag_style.emphasis
         if tag in (
             "b",
             "blockquote",
             "center",
             "code",
+            "del",
             "em",
             "i",
             "dd",
             "dt",
             "pre",
+            "s",
             "strong",
             "u",
         ):
@@ -743,19 +794,18 @@ class HTML2FPDF(HTMLParser):
             self.style_stack.append(
                 FontFace(
                     family=self.font_family,
-                    emphasis=self.pdf.emphasis,
+                    emphasis=self.font_emphasis,
                     size_pt=self.font_size_pt,
                     color=self.font_color,
                 )
             )
             tag_style = self.tag_styles[tag]
             if tag_style.color:
-                self.set_text_color(*tag_style.color.colors255)
-            self.set_font(
-                family=tag_style.family or self.font_family,
-                size=tag_style.size_pt or self.font_size_pt,
-                extra_emphasis=tag_style.emphasis,
-            )
+                self.font_color = tag_style.color
+            self.font_family = tag_style.family or self.font_family
+            self.font_size_pt = tag_style.size_pt or self.font_size_pt
+            if tag_style.emphasis:
+                self.font_emphasis |= tag_style.emphasis
             if tag == "pre":
                 self._pre_formatted = True
                 self._pre_started = True
@@ -829,7 +879,8 @@ class HTML2FPDF(HTMLParser):
                 self._write_paragraph("\u00a0")
             self._end_paragraph()
         if tag == "li":
-            self.set_text_color(*self.li_prefix_color)
+            prev_text_color = self.pdf.text_color
+            self.pdf.text_color = self.li_prefix_color
             if self.bullet:
                 bullet = self.bullet[self.indent - 1]
             else:
@@ -850,31 +901,24 @@ class HTML2FPDF(HTMLParser):
                 bottom_margin=tag_style.b_margin,
                 bullet=bullet,
             )
-            self.set_text_color(*self.font_color)
+            self.pdf.text_color = prev_text_color
         if tag == "font":
-            # save previous font state:
             self.style_stack.append(
                 FontFace(
                     family=self.font_family,
-                    emphasis=self.pdf.emphasis,
+                    emphasis=self.font_emphasis,
                     size_pt=self.font_size_pt,
                     color=self.font_color,
                 )
             )
             if "color" in attrs:
-                color = color_as_decimal(attrs["color"])
-                self.font_color = color
-            if "face" in attrs:
-                face = attrs.get("face").lower()
-                # This may result in a FPDFException "font not found".
-                self.set_font(face)
-                self.font_family = face
+                self.font_color = color_as_decimal(attrs["color"])
             if "font-size" in css_style:
                 self.font_size_pt = int(css_style.get("font-size"))
             elif "size" in attrs:
                 self.font_size_pt = int(attrs.get("size"))
-            self.set_font()
-            self.set_text_color(*self.font_color)
+            if "face" in attrs:
+                self.font_family = attrs.get("face").lower()
         if tag == "table":
             width = css_style.get("width", attrs.get("width"))
             if width:
@@ -977,6 +1021,8 @@ class HTML2FPDF(HTMLParser):
             self.pdf.char_vpos = "SUP"
         if tag == "sub":
             self.pdf.char_vpos = "SUB"
+        if tag == "title":
+            self._in_title = True
         if css_style.get("break-after") == "page":
             if tag in ("br", "hr", "img"):
                 self._end_paragraph()
@@ -1008,15 +1054,22 @@ class HTML2FPDF(HTMLParser):
         if tag == "a":
             self.href = ""
         if tag == "p":
+            if self.style_stack:
+                font_face = self.style_stack.pop()
+                self.font_family = font_face.family or self.font_family
+                self.font_size_pt = font_face.size_pt or self.font_size_pt
+                self.font_emphasis = font_face.emphasis
+                self.font_color = font_face.color
             self._end_paragraph()
             self.align = ""
         if tag in HEADING_TAGS:
             self.heading_level = None
-            font_face = self.style_stack.pop()
-            self.set_font(
-                font_face.family, font_face.size_pt, emphasis=font_face.emphasis
-            )
-            self.set_text_color(*font_face.color.colors255)
+            if self.style_stack:
+                font_face = self.style_stack.pop()
+                self.font_family = font_face.family or self.font_family
+                self.font_size_pt = font_face.size_pt or self.font_size_pt
+                self.font_emphasis = font_face.emphasis
+                self.font_color = font_face.color
             self._end_paragraph()
             self.follows_heading = True  # We don't want extra space below a heading.
         if tag in (
@@ -1029,14 +1082,16 @@ class HTML2FPDF(HTMLParser):
             "dd",
             "dt",
             "pre",
+            "s",
             "strong",
             "u",
         ):
-            font_face = self.style_stack.pop()
-            self.set_font(
-                font_face.family, font_face.size_pt, emphasis=font_face.emphasis
-            )
-            self.set_text_color(*font_face.color.colors255)
+            if self.style_stack:
+                font_face = self.style_stack.pop()
+                self.font_family = font_face.family or self.font_family
+                self.font_size_pt = font_face.size_pt or self.font_size_pt
+                self.font_emphasis = font_face.emphasis
+                self.font_color = font_face.color
             if tag == "pre":
                 self._pre_formatted = False
                 self._pre_started = False
@@ -1063,20 +1118,25 @@ class HTML2FPDF(HTMLParser):
                     self.td_th.get("bgcolor", self.tr.get("bgcolor", None))
                 )
                 style = FontFace(fill_color=bgcolor) if bgcolor else None
-                self.table_row.cell(text="", style=style)
+                colspan = int(self.td_th.get("colspan", "1"))
+                rowspan = int(self.td_th.get("rowspan", "1"))
+                self.table_row.cell(
+                    text="", style=style, colspan=colspan, rowspan=rowspan
+                )
             self.td_th = None
         if tag == "font":
-            # recover last font state
-            font_face = self.style_stack.pop()
-            self.font_color = font_face.color.colors255
-            self.set_font(
-                font_face.family, font_face.size_pt, emphasis=font_face.emphasis
-            )
-            self.set_text_color(*font_face.color.colors255)
+            if self.style_stack:
+                font_face = self.style_stack.pop()
+                self.font_family = font_face.family or self.font_family
+                self.font_size_pt = font_face.size_pt or self.font_size_pt
+                self.font_emphasis = font_face.emphasis
+                self.font_color = font_face.color
         if tag == "sup":
             self.pdf.char_vpos = "LINE"
         if tag == "sub":
             self.pdf.char_vpos = "LINE"
+        if tag == "title":
+            self._in_title = False
 
     def feed(self, data):
         super().feed(data)
@@ -1086,66 +1146,31 @@ class HTML2FPDF(HTMLParser):
         if self._tags_stack and self.warn_on_tags_not_matching:
             LOGGER.warning("Missing HTML end tag for <%s>", self._tags_stack[-1])
 
-    def set_font(
-        self,
-        family=None,
-        size=None,
-        emphasis=None,
-        extra_emphasis=None,
-        set_default=False,
-    ):
-        pdf = self.pdf
-        if emphasis is None:
-            emphasis = pdf.emphasis
-        if extra_emphasis:
-            emphasis |= extra_emphasis
-        if family:
-            self.font_family = family
-        if size:
-            self.font_size_pt = size
-            self.h = size / pdf.k
-        prev_page = pdf.page
-        if not set_default:  # make sure there's at least one font defined in the PDF.
-            pdf.page = 0
-        if (self.font_family, emphasis) != (pdf.font_family, pdf.emphasis):
-            pdf.set_font(self.font_family, emphasis.style, self.font_size_pt)
-            assert pdf.emphasis == emphasis
-        if self.font_size_pt != pdf.font_size:
-            pdf.set_font_size(self.font_size_pt)
-        pdf.page = prev_page
-
-    def set_text_color(self, r=None, g=0, b=0):
-        prev_page = self.pdf.page
-        self.pdf.page = 0
-        self.pdf.set_text_color(r, g, b)
-        self.pdf.page = prev_page
-
     def put_link(self, text):
-        "Put a hyperlink"
+        "Insert a hyperlink"
         prev_style = FontFace(
             family=self.font_family,
-            emphasis=self.pdf.emphasis,
+            emphasis=self.font_emphasis,
             size_pt=self.font_size_pt,
             color=self.font_color,
         )
         tag_style = self.tag_styles["a"]
         if tag_style.color:
-            self.set_text_color(*tag_style.color.colors255)
-        self.set_font(
-            family=tag_style.family or self.font_family,
-            size=tag_style.size_pt or self.font_size_pt,
-            extra_emphasis=tag_style.emphasis,
-        )
+            self.font_color = tag_style.color
+        self.font_family = tag_style.family or self.font_family
+        self.font_size_pt = tag_style.size_pt or self.font_size_pt
+        if tag_style.emphasis:
+            self.font_emphasis |= tag_style.emphasis
         self._write_paragraph(text, link=self.href)
         # Restore previous style:
-        self.set_font(
-            prev_style.family, prev_style.size_pt, emphasis=prev_style.emphasis
-        )
-        self.set_text_color(*prev_style.color.colors255)
+        self.font_family = prev_style.family or self.font_family
+        self.font_size_pt = prev_style.size_pt or self.font_size_pt
+        self.font_emphasis = prev_style.emphasis
+        self.font_color = prev_style.color
 
     # pylint: disable=no-self-use
     def render_toc(self, pdf, outline):
-        "This method can be overriden by subclasses to customize the Table of Contents style."
+        "This method can be overridden by subclasses to customize the Table of Contents style."
         pdf.ln()
         for section in outline:
             link = pdf.add_link(page=section.page_number)
@@ -1172,7 +1197,11 @@ def _scale_units(pdf, in_tag_styles):
         if isinstance(tag_style, TextStyle):
             out_tag_styles[tag_name] = tag_style.replace(
                 t_margin=tag_style.t_margin * conversion_factor,
-                l_margin=tag_style.l_margin * conversion_factor,
+                l_margin=(
+                    tag_style.l_margin * conversion_factor
+                    if isinstance(tag_style.l_margin, (int, float))
+                    else tag_style.l_margin
+                ),
                 b_margin=tag_style.b_margin * conversion_factor,
             )
         else:

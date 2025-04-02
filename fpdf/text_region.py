@@ -525,6 +525,7 @@ class TextRegion(ParagraphCollectorMixin):
                 ):
                     self.pdf.y += cur_paragraph.top_margin
                 if self.pdf.y + text_line.height > bottom:
+                    # => page break
                     last_line_height = prev_line_height
                     break
                 prev_line_height = last_line_height
@@ -660,7 +661,7 @@ class TextColumns(TextRegion, TextColumnarMixin):
         if self.balance:
             # Column balancing is currently very simplistic, and only works reliably when
             # line height doesn't change much within the text block.
-            # The "correct" solution would require an exact precalculation of the hight of
+            # The "correct" solution would require an exact precalculation of the height of
             # each column with the specific line heights and iterative regrouping of lines,
             # which seems excessive at this point.
             # Contribution of a more reliable but still reasonably simple algorithm welcome.
@@ -709,10 +710,14 @@ class TextColumns(TextRegion, TextColumnarMixin):
         if not text_lines:
             return
         page_bottom = self.pdf.h - self.pdf.b_margin
-        _first_page_top = max(self.pdf.t_margin, self.pdf.y)
-        self._render_page_lines(text_lines, _first_page_top, page_bottom)
+        first_page_top = max(self.pdf.t_margin, self.pdf.y)
+        self._render_page_lines(text_lines, first_page_top, page_bottom)
+        # Note: text_lines is progressively emptied by ._render_column_lines()
         while text_lines:
-            self.pdf._perform_page_break()
+            page_break = self.pdf._perform_page_break_if_need_be(self.pdf.h)
+            if not page_break:
+                # Can happen when rendering a footer in the wrong place - cf. issue #1222
+                break
             self._cur_column = 0
             self._render_page_lines(text_lines, self.pdf.y, page_bottom)
 
