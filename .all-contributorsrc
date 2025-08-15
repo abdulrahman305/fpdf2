@@ -1424,6 +1424,96 @@
       "contributions": [
         "bug"
       ]
+    },
+    {
+      "login": "Mercuron",
+      "name": "Mercuron",
+      "avatar_url": "https://avatars.githubusercontent.com/u/45468521?v=4",
+      "profile": "https://github.com/Mercuron",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "yuyiz67",
+      "name": "yuyiz67",
+      "avatar_url": "https://avatars.githubusercontent.com/u/116842527?v=4",
+      "profile": "https://github.com/yuyiz67",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "biermanr",
+      "name": "Rob",
+      "avatar_url": "https://avatars.githubusercontent.com/u/129201865?v=4",
+      "profile": "https://github.com/biermanr",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "weltkante",
+      "name": "Tobias Käs",
+      "avatar_url": "https://avatars.githubusercontent.com/u/5845814?v=4",
+      "profile": "https://github.com/weltkante",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "chigkim",
+      "name": "Chi Kim",
+      "avatar_url": "https://avatars.githubusercontent.com/u/22120994?v=4",
+      "profile": "https://github.com/chigkim",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "petsuter",
+      "name": "Peter Suter",
+      "avatar_url": "https://avatars.githubusercontent.com/u/8830354?v=4",
+      "profile": "https://github.com/petsuter",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "slkoo-core",
+      "name": "slkoo-core",
+      "avatar_url": "https://avatars.githubusercontent.com/u/201556645?v=4",
+      "profile": "https://github.com/slkoo-core",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "eshentials",
+      "name": "Eshani",
+      "avatar_url": "https://avatars.githubusercontent.com/u/144895187?v=4",
+      "profile": "https://github.com/eshentials",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "pratstick",
+      "name": "Pratyush ",
+      "avatar_url": "https://avatars.githubusercontent.com/u/116508117?v=4",
+      "profile": "https://github.com/pratstick",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "dlespiau",
+      "name": "Damien",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7986?v=4",
+      "profile": "https://github.com/dlespiau",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,

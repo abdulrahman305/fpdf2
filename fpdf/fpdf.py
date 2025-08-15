@@ -61,7 +61,6 @@ from .deprecation import (
 from .drawing import (
     DeviceRGB,
     DrawingContext,
-    GraphicsStateDictRegistry,
     GraphicsStyle,
     PaintedPath,
     Point,
@@ -142,7 +141,7 @@ from .unicode_script import UnicodeScript, get_unicode_script
 from .util import get_scale_factor, Padding
 
 # Public global variables:
-FPDF_VERSION = "2.8.2"
+FPDF_VERSION = "2.8.4"
 PAGE_FORMATS = {
     "a3": (841.89, 1190.55),
     "a4": (595.28, 841.89),
@@ -234,8 +233,6 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
     MARKDOWN_LINK_REGEX = re.compile(r"^\[([^][]+)\]\(([^()]+)\)(.*)$", re.DOTALL)
     MARKDOWN_LINK_COLOR = None
     MARKDOWN_LINK_UNDERLINE = True
-    _GS_REGEX = re.compile(r"/(GS\d+) gs")
-    _IMG_REGEX = re.compile(r"/I(\d+) Do")
 
     HTML2FPDF_CLASS = HTML2FPDF
 
@@ -341,6 +338,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self.font_stretching = 100  # current font stretching
         self.char_spacing = 0  # current character spacing
         self.current_font = None  # None or an instance of CoreFont or TTFFont
+        self.current_font_is_set_on_page = False  # current font and size are already added to current page contents with _out
         self.draw_color = self.DEFAULT_DRAW_COLOR
         self.fill_color = self.DEFAULT_FILL_COLOR
         self.text_color = self.DEFAULT_TEXT_COLOR
@@ -373,7 +371,6 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self._fallback_font_exact_match = False
 
         self._current_draw_context = None
-        self._drawing_graphics_state_registry = GraphicsStateDictRegistry()
         # map page numbers to a set of GraphicsState names:
         self._record_text_quad_points = False
         self._resource_catalog = ResourceCatalog()
@@ -441,7 +438,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             warn_on_tags_not_matching (bool): control warnings production for unmatched HTML tags. Defaults to `True`.
             tag_indents (dict): [**DEPRECATED since v2.8.0**]
                 mapping of HTML tag names to numeric values representing their horizontal left indentation. - Set `tag_styles` instead
-            tag_styles (dict[str, fpdf.fonts.TextStyle]): mapping of HTML tag names to `fpdf.TextStyle` or `fpdf.FontFace` instances
+            tag_styles (dict[str, fpdf.fonts.TextStyle]): mapping of HTML tag names to `fpdf.fonts.TextStyle` or `fpdf.fonts.FontFace` instances
         """
         html2pdf = self.HTML2FPDF_CLASS(self, *args, **kwargs)
         with self.local_context():
@@ -538,7 +535,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
     @property
     def pages_count(self):
         """
-        Returns the total pages of the document.
+        Returns the total pages of the document, at the time it is called.
+
+        Do not use this in `fpdf.fpdf.FPDF.header()` or `fpdf.fpdf.FPDF.footer()`,
+        as its value will not be the total page count.
+        Uses `{nb}` instead, _cf._ `fpdf.fpdf.FPDF.alias_nb_pages()`.
         """
         return len(self.pages)
 
@@ -603,8 +604,10 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
 
     def set_auto_page_break(self, auto, margin=0):
         """
-        Set auto page break mode and triggering bottom margin.
+        Set auto page break mode, and optionally the bottom margin that triggers it.
         By default, the mode is on and the bottom margin is 2 cm.
+
+        Detailed documentation on page breaks: https://py-pdf.github.io/fpdf2/PageBreaks.html
 
         Args:
             auto (bool): enable or disable this mode
@@ -888,7 +891,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 meaning to use the best image filter given the images provided.
                 Allowed values: `FlateDecode` (lossless zlib/deflate compression),
                 `DCTDecode` (lossy compression with JPEG)
+                `LZWDecode` (Lempel-Ziv-Welch aka LZW compression)
                 and `JPXDecode` (lossy compression with JPEG2000).
+
+        [**NEW in 2.8.4**] Note that, when using `LZWDecode`, having NumPy installed
+        will improve performances, reducing execution time.
         """
         if image_filter not in SUPPORTED_IMAGE_FILTERS:
             raise ValueError(
@@ -910,7 +917,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         This substitution can be disabled for performances reasons, by calling `alias_nb_pages(None)`.
 
         Args:
-            alias (str): the alias. Defaults to "{nb}".
+            alias (str): the alias. Defaults to `"{nb}"`.
 
         Notes
         -----
@@ -930,6 +937,10 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         label_prefix: str = None,
         label_start: int = None,
     ):
+        """
+        Enable `fpdf.output.PDFPageLabel` to be inserted on every page.
+        This will be displayed by some PDF readers to identify pages.
+        """
         current_page_label = None
         if self.page in self.pages:
             current_page_label = self.pages[self.page].get_page_label()
@@ -1001,6 +1012,9 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             raise FPDFException(
                 "A page cannot be added on a closed document, after calling output()"
             )
+
+        self.current_font_is_set_on_page = False
+
         family = self.font_family
         emphasis = self.emphasis
         size = self.font_size_pt
@@ -1180,6 +1194,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         return self.page
 
     def get_page_label(self):
+        """
+        Return the current page `fpdf.output.PDFPageLabel`.
+        This will be displayed by some PDF readers to identify pages.
+        `FPDF.set_page_label()` needs to be called first for those to be inserted.
+        """
         return self.pages[self.page].get_label()
 
     def set_draw_color(self, r, g=-1, b=-1):
@@ -1322,7 +1341,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
 
         starting_style = self._current_graphic_style()
         render_args = (
-            self._drawing_graphics_state_registry,
+            self._resource_catalog,
             Point(self.x, self.y),
             self.k,
             self.h,
@@ -1334,15 +1353,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         else:
             rendered = context.render(*render_args)
 
-        for match in self._GS_REGEX.finditer(rendered):
-            self._resource_catalog.add(
-                PDFResourceType.EXT_G_STATE, match.group(1), self.page
-            )
-        # Registering raster images embedded in the vector graphics:
-        for match in self._IMG_REGEX.finditer(rendered):
-            self._resource_catalog.add(
-                PDFResourceType.X_OBJECT, int(match.group(1)), self.page
-            )
+        # Let the catalog scan & register resources used by this drawing:
+        self._resource_catalog.index_stream_resources(rendered, self.page)
         # Once we handle text-rendering SVG tags (cf. PR #1029),
         # we should also detect fonts used and add them to the resource catalog
 
@@ -1785,7 +1797,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 math.radians((360 / numSides) * i) + math.radians(rotateDegrees)
             )
             points.append(point)
-        # creates list of touples containing cordinate points of vertices
+        # creates list of touples containing coordinate points of vertices
 
         self.polygon(points, style=style)
         # passes points through polygon function
@@ -1841,14 +1853,16 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         It can be drawn (border only), filled (with no border) or both.
 
         Args:
-            a (float): Semi-major axis diameter.
-            b (float): Semi-minor axis diameter, if None, equals to a (default: None).
+            x (float): Abscissa of upper-left corner of the bounding box of the full ellipse.
+            y (float): Ordinate of upper-left corner of the bounding box of the full ellipse.
+            a (float): Major axis diameter (width of bounding box).
+            b (float): Minor axis diameter (height of bounding box), if None, equals to a (default: None).
             start_angle (float): Start angle of the arc (in degrees).
             end_angle (float): End angle of the arc (in degrees).
             inclination (float): Inclination of the arc in respect of the x-axis (default: 0).
             clockwise (bool): Way of drawing the arc (True: clockwise, False: counterclockwise) (default: False).
-            start_from_center (bool): Start drawing from the center of the circle (default: False).
-            end_at_center (bool): End drawing at the center of the circle (default: False).
+            start_from_center (bool): Start drawing from the center of the ellipse (default: False).
+            end_at_center (bool): End drawing at the center of the ellipse (default: False).
             style (fpdf.enums.RenderStyle, str): Optional style of rendering. Allowed values are:
 
             * `D` or None: draw border. This is the default value.
@@ -2234,11 +2248,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self.font_style = style
         self.font_size_pt = size
         self.current_font = self.fonts[fontkey]
-        if self.page > 0:
-            self._out(f"BT /F{self.current_font.i} {self.font_size_pt:.2f} Tf ET")
-            self._resource_catalog.add(
-                PDFResourceType.FONT, self.current_font.i, self.page
-            )
+        self.current_font_is_set_on_page = False
 
     def set_font_size(self, size):
         """
@@ -2250,15 +2260,19 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         if isclose(self.font_size_pt, size):
             return
         self.font_size_pt = size
-        if self.page > 0:
-            if not self.current_font:
-                raise FPDFException(
-                    "Cannot set font size: a font must be selected first"
-                )
-            self._out(f"BT /F{self.current_font.i} {self.font_size_pt:.2f} Tf ET")
-            self._resource_catalog.add(
-                PDFResourceType.FONT, self.current_font.i, self.page
-            )
+        self.current_font_is_set_on_page = False
+
+    def _set_font_for_page(self, font, font_size_pt, wrap_in_text_object=True):
+        """
+        Set font and size for current page.
+        This step is needed before adding text into page and not needed in set_font and set_font_size.
+        """
+        sl = f"/F{font.i} {font_size_pt:.2f} Tf"
+        if wrap_in_text_object:
+            sl = f"BT {sl} ET"
+        self._resource_catalog.add(PDFResourceType.FONT, font.i, self.page)
+        self.current_font_is_set_on_page = True
+        return sl
 
     def set_char_spacing(self, spacing):
         """
@@ -2571,6 +2585,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         """
         if not self.font_family:
             raise FPDFException("No font set, you need to call set_font() beforehand")
+        if not self.current_font_is_set_on_page:
+            self._out(self._set_font_for_page(self.current_font, self.font_size_pt))
         if x is None:
             x = self.x
         if y is None:
@@ -2590,7 +2606,6 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             default_appearance=f"({self.draw_color.serialize()} /F{self.current_font.i} {self.font_size_pt:.2f} Tf)",
             **kwargs,
         )
-        self._resource_catalog.add(PDFResourceType.FONT, self.current_font.i, self.page)
         self.pages[self.page].annots.append(annotation)
         return annotation
 
@@ -2774,11 +2789,12 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         if not self.font_family:
             raise FPDFException("No font set, you need to call set_font() beforehand")
         text = self.normalize_text(text)
+        if not self.current_font_is_set_on_page:
+            self._out(self._set_font_for_page(self.current_font, self.font_size_pt))
         sl = [f"BT {x * self.k:.2f} {(self.h - y) * self.k:.2f} Td"]
         if self.text_mode != TextMode.FILL:
             sl.append(f" {self.text_mode} Tr {self.line_width:.2f} w")
         sl.append(f"{self.current_font.encode_text(text)} ET")
-        self._resource_catalog.add(PDFResourceType.FONT, self.current_font.i, self.page)
         if (
             text != "" and (self.underline or self.strikethrough)
         ) or self._record_text_quad_points:
@@ -3066,12 +3082,13 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 "text_mode",
                 "text_shaping",
                 "underline",
+                "current_font_is_set_on_page",
             ):
                 setattr(self, key, value)
             else:
                 raise ValueError(f"Unsupported setting: {key}")
         if gs:
-            gs_name = self._drawing_graphics_state_registry.register_style(gs)
+            gs_name = self._resource_catalog.register_graphics_style(gs)
             self._resource_catalog.add(PDFResourceType.EXT_G_STATE, gs_name, self.page)
             self._out(f"q /{gs_name} gs")
         else:
@@ -3084,7 +3101,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         ):
             self.set_font(
                 font_family or self.font_family,
-                font_style or self.font_style,
+                # Beware: font_style='' must be handled distinctly from font_style=None
+                self.font_style if font_style is None else font_style,
                 font_size_pt or self.font_size_pt,
             )
         if line_width is not None:
@@ -3107,11 +3125,15 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
     @property
     def accept_page_break(self):
         """
-        Whenever a page break condition is met, this method is called,
+        Whenever a page break condition is met, this `@property` method is called,
         and the break is issued or not depending on the returned value.
 
-        The default implementation returns a value according to the mode selected by `FPDF.set_auto_page_break()`.
+        The default implementation returns `self.auto_page_break`,
+        a value according to the mode selected by `FPDF.set_auto_page_break()`.
+
         This method is called automatically and should not be called directly by the application.
+
+        Detailed documentation on page breaks: https://py-pdf.github.io/fpdf2/PageBreaks.html
         """
         return self.auto_page_break
 
@@ -3240,6 +3262,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             fill=fill,
             link=link,
             center=center,
+            prevent_font_change=markdown,
         )
 
     def _render_styled_text_line(
@@ -3253,6 +3276,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         link: str = "",
         center: bool = False,
         padding: Padding = None,
+        prevent_font_change=False,
     ):
         """
         Prints a cell (rectangular area) with optional borders, background color and
@@ -3283,6 +3307,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             center (bool): center the cell horizontally on the page.
             padding (Padding or None): optional padding to apply to the cell content.
                 If padding for left and right is non-zero then c_margin is ignored.
+            prevent_font_change (bool): ensure no font settings (family / size / style)
+                change during this call.
 
         Returns: a boolean indicating if page break was triggered
         """
@@ -3371,6 +3397,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         current_char_vpos = CharVPos.LINE
         current_font = self.current_font
         current_font_size_pt = self.font_size_pt
+        current_font_style = self.font_style
         current_text_mode = self.text_mode
         current_font_stretching = self.font_stretching
         current_char_spacing = self.char_spacing
@@ -3393,6 +3420,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 f"BT {(self.x + dx) * k:.2f} "
                 f"{(self.h - self.y - 0.5 * h - 0.3 * max_font_size) * k:.2f} Td"
             )
+            underlines, strikethroughs = [], []
             for i, frag in enumerate(fragments):
                 if isinstance(frag, TotalPagesSubstitutionFragment):
                     self.pages[self.page].add_text_substitution(frag)
@@ -3412,21 +3440,50 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 if current_char_spacing != frag.char_spacing:
                     current_char_spacing = frag.char_spacing
                     sl.append(f"{frag.char_spacing:.2f} Tc")
-                if (
-                    current_font != frag.font
-                    or current_font_size_pt != frag.font_size_pt
-                    or current_char_vpos != frag.char_vpos
-                ):
-                    if current_char_vpos != frag.char_vpos:
-                        current_char_vpos = frag.char_vpos
-                    if current_font_size_pt != frag.font_size_pt:
+                if not self.current_font_is_set_on_page:
+                    if prevent_font_change:
+                        # This is "local" to the current BT / ET context:
+                        current_font = frag.font
                         current_font_size_pt = frag.font_size_pt
-                    current_font = frag.font
-                    sl.append(f"/F{frag.font.i} {frag.font_size_pt:.2f} Tf")
-                    if self.page > 0:
+                        current_font_style = frag.font_style
+                        sl.append(f"/F{current_font.i} {current_font_size_pt:.2f} Tf")
                         self._resource_catalog.add(
                             PDFResourceType.FONT, current_font.i, self.page
                         )
+                        current_char_vpos = frag.char_vpos
+                    else:
+                        # This is "global" to the page,
+                        # as it is rendered in the content stream
+                        # BEFORE the text_lines /fragments,
+                        # wrapped into BT / ET operators:
+                        current_font = self.current_font = frag.font
+                        current_font_size_pt = self.font_size_pt = frag.font_size_pt
+                        current_font_style = self.font_style = frag.font_style
+                        self._out(
+                            self._set_font_for_page(
+                                current_font,
+                                current_font_size_pt,
+                            )
+                        )
+                        current_char_vpos = frag.char_vpos
+                elif (
+                    current_font != frag.font
+                    or current_font_size_pt != frag.font_size_pt
+                    or current_font_style != frag.font_style
+                    or current_char_vpos != frag.char_vpos
+                ):
+                    # This is "local" to the current BT / ET context:
+                    current_font = frag.font
+                    current_font_size_pt = frag.font_size_pt
+                    current_font_style = frag.font_style
+                    sl.append(
+                        self._set_font_for_page(
+                            current_font,
+                            current_font_size_pt,
+                            wrap_in_text_object=False,
+                        )
+                    )
+                    current_char_vpos = frag.char_vpos
                 lift = frag.lift
                 if lift != current_lift:
                     # Use text rise operator:
@@ -3454,22 +3511,12 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                     initial_cs=i != 0
                 ) + word_spacing * frag.characters.count(" ")
                 if frag.underline:
-                    sl.append(
-                        self._do_underline(
-                            self.x + dx + s_width,
-                            self.y + (0.5 * h) + (0.3 * frag.font_size),
-                            frag_width,
-                            frag.font,
-                        )
+                    underlines.append(
+                        (self.x + dx + s_width, frag_width, frag.font, frag.font_size)
                     )
                 if frag.strikethrough:
-                    sl.append(
-                        self._do_strikethrough(
-                            self.x + dx + s_width,
-                            self.y + (0.5 * h) + (0.3 * frag.font_size),
-                            frag_width,
-                            frag.font,
-                        )
+                    strikethroughs.append(
+                        (self.x + dx + s_width, frag_width, frag.font, frag.font_size)
                     )
                 if frag.link:
                     self.link(
@@ -3485,6 +3532,22 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
 
             sl.append("ET")
 
+            # Underlines & strikethrough must be rendred OUTSIDE BT/ET contexts,
+            # cf. https://github.com/py-pdf/fpdf2/issues/1456
+            if underlines:
+                for start_x, width, font, font_size in underlines:
+                    sl.append(
+                        self._do_underline(
+                            start_x, self.y + (0.5 * h) + (0.3 * font_size), width, font
+                        )
+                    )
+            if strikethroughs:
+                for start_x, width, font, font_size in strikethroughs:
+                    sl.append(
+                        self._do_strikethrough(
+                            start_x, self.y + (0.5 * h) + (0.3 * font_size), width, font
+                        )
+                    )
             if link:
                 self.link(
                     self.x + dx,
@@ -3504,6 +3567,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 or current_char_vpos != CharVPos.LINE
                 or current_font != self.current_font
                 or current_font_size_pt != self.font_size_pt
+                or current_font_style != self.font_style
                 or current_text_mode != self.text_mode
                 or fill_color_changed
                 or current_font_stretching != self.font_stretching
@@ -3827,6 +3891,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         Let you know if adding an element will trigger a page break,
         based on its height and the current ordinate (`y` position).
 
+        Detailed documentation on page breaks: https://py-pdf.github.io/fpdf2/PageBreaks.html
+
         Args:
             height (float): height of the section that would be added, e.g. a cell
 
@@ -3852,9 +3918,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         return False
 
     def _perform_page_break(self):
-        # Defensive check, this should have tested by a previous call to .will_page_break():
-        if not self.accept_page_break or self.in_footer:
-            return
+        """
+        Performs a page break, taking care to preserve self.x
+        and a potential existing `fpdf.fpdf.FPDF.local_context()`.
+        A call to `fpdf.fpdf.FPDF.will_page_break()` should be performed beforehand.
+        """
         x = self.x
         # If we are in a .local_context(), we need to temporarily leave it,
         # by popping out every GraphicsState:
@@ -3867,12 +3935,14 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             # (which is what FPDF.local_context() does):
             self._end_local_context()
         # Using a temporary GS to render header & footer:
+        self.current_font_is_set_on_page = False
         self._push_local_stack()
         self.add_page(same=True)
-        for prev_gs in reversed(gs_stack):
-            self._start_local_context(**prev_gs)
-            self._push_local_stack()
         self._pop_local_stack()
+        for prev_gs in reversed(gs_stack):
+            self._push_local_stack()
+            prev_gs["current_font_is_set_on_page"] = False
+            self._start_local_context(**prev_gs)
         self.x = x  # restore x but not y after drawing header
 
     def _has_next_page(self):
@@ -4107,7 +4177,9 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             else self._preload_font_styles(normalized_string, markdown)
         )
 
-        prev_font_style, prev_underline = self.font_style, self.underline
+        prev_current_font = self.current_font
+        prev_font_style = self.font_style
+        prev_underline = self.underline
         total_height = 0
 
         text_lines = []
@@ -4146,13 +4218,14 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         page_break_triggered = False
 
         for text_line_index, text_line in enumerate(text_lines):
-            if self._perform_page_break_if_need_be(h + padding.bottom):
+            start_of_new_page = self._perform_page_break_if_need_be(h + padding.bottom)
+            if start_of_new_page:
                 page_break_triggered = True
                 self.y += padding.top
 
-            if box_required and (text_line_index == 0 or page_break_triggered):
+            if box_required and (text_line_index == 0 or start_of_new_page):
                 # estimate how many cells can fit on this page
-                top_gap = self.y + padding.top
+                top_gap = self.y  # Top padding has already been added
                 bottom_gap = padding.bottom + self.b_margin
                 lines_before_break = int((self.h - top_gap - bottom_gap) // line_height)
                 # check how many cells should be rendered
@@ -4181,6 +4254,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 fill=False,  # already rendered
                 link=link,
                 padding=Padding(0, padding.right, 0, padding.left),
+                prevent_font_change=markdown,
             )
             total_height += line_height
             if not is_last_line and align == Align.X:
@@ -4210,9 +4284,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             self.y += padding.bottom
 
         if markdown:
-            if self.font_style != prev_font_style:
-                self.font_style = prev_font_style
-                self.current_font = self.fonts[self.font_family + self.font_style]
+            self.font_style = prev_font_style
+            self.current_font = prev_current_font
             self.underline = prev_underline
 
         if new_x == XPos.RIGHT:  # move right by right padding to align outer RHS edge
@@ -4628,7 +4701,6 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         images = self.image_cache.images
         width_in_pt, height_in_pt = w * scale, h * scale
         lowres_name = f"lowres-{name}"
-        lowres_info = images.get(lowres_name)
         if (
             info["w"] > width_in_pt * self.oversized_images_ratio
             and info["h"] > height_in_pt * self.oversized_images_ratio
@@ -4657,12 +4729,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 )
                 info["usages"] -= 1  # no need to embed the high-resolution image
                 if info["usages"] == 0:
-                    for (
-                        _,
-                        rtype,
-                    ), resource in self._resource_catalog.resources_per_page.items():
+                    resources_per_page = self._resource_catalog.resources_per_page
+                    for (_, rtype), resource in resources_per_page.items():
                         if rtype == PDFResourceType.X_OBJECT and info["i"] in resource:
                             resource.remove(info["i"])
+                lowres_info = images.get(lowres_name)
                 if lowres_info:  # Great, we've already done the job!
                     info = lowres_info
                     if info["w"] * info["h"] < dims[0] * dims[1]:
@@ -4704,11 +4775,6 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 raise ValueError(
                     f"Invalid value for attribute .oversized_images: {self.oversized_images}"
                 )
-        elif lowres_info:
-            # Embedding the same image in high-res after inserting it in low-res:
-            lowres_info.update(info)
-            del images[name]
-            info = lowres_info
         return info
 
     def preload_image(self, name, dims=None):
@@ -4772,7 +4838,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 the document, then the current font height is used.
         """
         self.x = self.l_margin
-        if h:
+        if h is not None:
             self.y += h
         elif self._lasth:
             self.y += self._lasth
@@ -4990,11 +5056,9 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                         # pylint: disable=protected-access
                         section.struct_elem._page_number = new_index
             # Fix resource catalog:
+            resources_per_page = self._resource_catalog.resources_per_page
             new_resources_per_page = defaultdict(set)
-            for (
-                page_number,
-                resource_type,
-            ), resource in self._resource_catalog.resources_per_page.items():
+            for (page_number, resource_type), resource in resources_per_page.items():
                 key = (indices_remap.get(page_number, page_number), resource_type)
                 new_resources_per_page[key] = resource
             self._resource_catalog.resources_per_page = new_resources_per_page
@@ -5255,6 +5319,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         Ensures that all rendering performed in this context appear on a single page
         by performing page break beforehand if need be.
 
+        Detailed documentation on page breaks: https://py-pdf.github.io/fpdf2/PageBreaks.html
+
         Notes
         -----
 
@@ -5319,7 +5385,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 extra pages in the ToC, which may cause discrepancies with pre-rendered
                 page numbers. For consistent numbering, using page labels to create a
                 separate numbering style for the ToC is recommended.
-            reset_page_indices (bool): Whether to reset the pages indixes after the ToC. Default to True.
+            reset_page_indices (bool): Whether to reset the pages indices after the ToC. Default to True.
         """
         if pages < 1:
             raise ValueError(
@@ -5505,6 +5571,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             ),
             font_face.size_pt or self.font_size_pt,
         )
+        self.current_font_is_set_on_page = False
         prev_text_color = self.text_color
         if font_face.color is not None and font_face.color != self.text_color:
             self.set_text_color(font_face.color)

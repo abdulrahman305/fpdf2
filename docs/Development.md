@@ -2,8 +2,6 @@
 
 This page has summary information about developing the fpdf2 library.
 
-[TOC]
-
 ## Repository structure
 
 * `.github/` - GitHub Actions configuration
@@ -208,17 +206,36 @@ static code analysis with `pylint`, unit tests...
 _Pull Requests_ submitted must pass all those checks in order to be approved.
 Ask maintainers through comments if some errors in the pipeline seem obscure to you.
 
+### Renovate, GitHub Actions & security
+We use [Renovate](https://github.com/apps/renovate) to detect dependency updates & create PRs
+for the Python dependencies / GitHub Actions / NPM dependencies that we use.
+
+Its configuration file is [renovate.json](https://github.com/py-pdf/fpdf2/blob/master/renovate.json),
+and the full tool documentation is there: [docs.renovatebot.com](https://docs.renovatebot.com/).
+
+To debug issues with Renovate, it can be useful to invoke it locally using Docker, like this:
+
+    docker run -e LOG_LEVEL=debug docker.io/renovate/renovate:41-full --dry-run --token "$GITHUB_OAUTH_TOKEN" py-pdf/fpdf2
+
+We also use [zizmor](https://woodruffw.github.io/zizmor/) as a GitHub Action
+to perform static analysis on our pipeline definition files.
+
+In order to use `zizmor` locally:
+
+    zizmor .github/workflows/*.yml
+
 ### typos
 [typos](https://github.com/crate-ci/typos) is a handy CLI tool to detect & auto-fix [typos](https://en.wikipedia.org/wiki/Typographical_error) in source files.
 Installation is relatively straightforward ([read the docs](https://github.com/crate-ci/typos?tab=readme-ov-file#install)).
 
 This tool is invoked in the [pre-commit hooks](#pre-commit-hook) and in our CI pipeline.
+
 If it fails, you should either:
 
 * auto-fix the errors detected by invoking `typos --write-changes`
 * add an exclusion rule to `.typos.toml`
 
-### Release checklist
+## Release checklist
 1. complete `CHANGELOG.md` and add the version & date of the new release
 2. bump `FPDF_VERSION` in `fpdf/fpdf.py`.
 Also (optional, once every year), update `contributors/contributors-map-small.png` based on <https://py-pdf.github.io/fpdf2/contributors.html>

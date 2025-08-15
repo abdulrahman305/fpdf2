@@ -4,6 +4,8 @@ Mixin class for managing a stack of graphics state variables.
 The contents of this module are internal to fpdf2, and not part of the public API.
 They may change at any time without prior warning or any deprecation period,
 in non-backward-compatible ways.
+
+Usage documentation at: <https://py-pdf.github.io/fpdf2/Internals.html#graphicsstatemixin>
 """
 
 from copy import copy
@@ -43,6 +45,7 @@ class GraphicsStateMixin:
                 font_family="",
                 font_size_pt=0,
                 current_font={},
+                current_font_is_set_on_page=False,
                 dash_pattern=dict(dash=0, gap=0, phase=0),
                 line_width=0,
                 text_mode=TextMode.FILL,
@@ -179,6 +182,14 @@ class GraphicsStateMixin:
     @current_font.setter
     def current_font(self, v):
         self.__statestack[-1]["current_font"] = v
+
+    @property
+    def current_font_is_set_on_page(self):
+        return self.__statestack[-1]["current_font_is_set_on_page"]
+
+    @current_font_is_set_on_page.setter
+    def current_font_is_set_on_page(self, v):
+        self.__statestack[-1]["current_font_is_set_on_page"] = v
 
     @property
     def dash_pattern(self):

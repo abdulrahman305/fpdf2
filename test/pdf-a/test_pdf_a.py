@@ -9,7 +9,6 @@ import pikepdf
 
 import pytest
 
-# pylint: disable=import-error,no-name-in-module
 from test.conftest import assert_pdf_equal
 
 HERE = Path(__file__).resolve().parent
@@ -48,7 +47,7 @@ class PDF(FPDF):
                     meta["dc:description"] = self.description
                 if self.keywords:
                     meta["pdf:Keywords"] = self.keywords
-                meta["pdf:Producer"] = f"py-pdf/fpdf{FPDF_VERSION}"
+                meta["pdf:Producer"] = f"py-pdf/fpdf2"
                 meta["xmp:CreatorTool"] = __name__
                 # meta["xmp:CreateDate"] = already done by assert_pdf_equal()
                 meta["pdfaid:part"] = "3"
@@ -56,10 +55,6 @@ class PDF(FPDF):
             pdf.save(deterministic_id=True)
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 9),
-    reason="Fails on Python 3.8 because the PDFFontStream contents change",
-)
 def test_basic_pdfa(tmp_path):
     pdf = PDF(
         language="en-US",

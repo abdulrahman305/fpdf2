@@ -6,6 +6,7 @@ import pytest
 from fpdf import FPDF, FPDFException
 from test.conftest import (
     assert_pdf_equal,
+    assert_same_file,
     ensure_exec_time_below,
     ensure_rss_memory_below,
     LOREM_IPSUM,
@@ -71,7 +72,7 @@ def test_cell_ln_1(tmp_path):
     with pytest.warns(DeprecationWarning) as record:
         doc.cell(w=100, h=LINE_HEIGHT, border=1, text="Lorem ipsum", ln=1)
     assert len(record) == 1
-    assert record[0].filename == __file__
+    assert_same_file(record[0].filename, __file__)
 
     doc.cell(w=100, h=LINE_HEIGHT, border=1, text="Ut nostrud irure")
     assert_pdf_equal(doc, HERE / "ln_1.pdf", tmp_path)
@@ -235,11 +236,14 @@ def test_cell_markdown_bleeding(tmp_path):  # issue 241
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Times", size=60)
-    pdf.cell(text="--Lorem Ipsum dolor--", markdown=True, new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(text="No Markdown", markdown=False, new_x="LMARGIN", new_y="NEXT")
     pdf.cell(text="**Lorem Ipsum dolor**", markdown=True, new_x="LMARGIN", new_y="NEXT")
+    assert pdf.font_style == ""
+    pdf.cell(text="No Markdown", markdown=False, new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(text="--Lorem Ipsum dolor--", markdown=True, new_x="LMARGIN", new_y="NEXT")
+    assert pdf.font_style == ""
     pdf.cell(text="No Markdown", markdown=False, new_x="LMARGIN", new_y="NEXT")
     pdf.cell(text="__Lorem Ipsum dolor__", markdown=True, new_x="LMARGIN", new_y="NEXT")
+    assert pdf.font_style == ""
     pdf.cell(text="No Markdown", markdown=False, new_x="LMARGIN", new_y="NEXT")
     assert_pdf_equal(pdf, HERE / "cell_markdown_bleeding.pdf", tmp_path)
 
