@@ -12,6 +12,7 @@ import hashlib
 import io
 import logging
 import math
+import mimetypes
 import os
 import re
 import sys
@@ -54,7 +55,7 @@ except ImportError:
         pass
 
 
-from .actions import URIAction
+from .actions import GoToAction, URIAction
 from .annotations import (
     DEFAULT_ANNOT_FLAGS,
     AnnotationDict,
@@ -80,8 +81,10 @@ from .enums import (
     Angle,
     AnnotationFlag,
     AnnotationName,
+    AssociatedFileRelationship,
     CharVPos,
     Corner,
+    DocumentCompliance,
     EncryptionMethod,
     FileAttachmentAnnotationName,
     MethodReturnValue,
@@ -101,7 +104,12 @@ from .enums import (
     XPos,
     YPos,
 )
-from .errors import FPDFException, FPDFPageFormatException, FPDFUnicodeEncodingException
+from .errors import (
+    FPDFException,
+    FPDFPageFormatException,
+    FPDFUnicodeEncodingException,
+    PDFAComplianceError,
+)
 from .fonts import CORE_FONTS, CoreFont, FontFace, TextStyle, TitleStyle, TTFFont
 from .graphics_state import GraphicsStateMixin
 from .html import HTML2FPDF
@@ -139,12 +147,12 @@ from .recorder import FPDFRecorder
 from .sign import Signature
 from .structure_tree import StructureTreeBuilder
 from .svg import Percent, SVGObject
-from .syntax import DestinationXYZ, PDFArray, PDFDate
+from .syntax import DestinationXYZ, PDFArray, PDFDate, PDFString
 from .table import Table, draw_box_borders
 from .text_region import TextColumns, TextRegionMixin
 from .transitions import Transition
 from .unicode_script import UnicodeScript, get_unicode_script
-from .util import Padding, get_scale_factor
+from .util import Padding, get_scale_factor, builtin_srgb2014_bytes
 
 # Public global variables:
 FPDF_VERSION = "2.8.4"
@@ -244,10 +252,12 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
 
     def __init__(
         self,
-        orientation="portrait",
-        unit="mm",
-        format="A4",
+        orientation: Optional[Union[str, PageOrientation]] = PageOrientation.PORTRAIT,
+        unit: Union[str, float] = "mm",
+        format: Union[str, tuple[float, float]] = "A4",
         font_cache_dir="DEPRECATED",
+        *,
+        enforce_compliance: Optional[Union[str, DocumentCompliance]] = None,
     ):
         """
         Args:
@@ -289,6 +299,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self.fonts = {}  # map font string keys to an instance of CoreFont or TTFFont
         # map page numbers to a set of font indices:
         self.links = {}  # array of Destination objects starting at index 1
+        self.named_destinations = {}  # dictionary mapping names to Destination objects
         self.embedded_files = []  # array of PDFEmbeddedFile
         self.image_cache = ImageCache()
         self.in_footer = False  # flag set while rendering footer
@@ -376,6 +387,19 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self._fallback_font_ids = []
         self._fallback_font_exact_match = False
         self.render_color_fonts = True
+        self._compliance = (
+            DocumentCompliance.coerce(enforce_compliance)
+            if enforce_compliance
+            else None
+        )
+        if self._compliance:
+            if self._compliance.profile == "PDFA" and self._compliance.part == 1:
+                self._set_min_pdf_version("1.4")
+                self.allow_images_transparency = False
+            if self._compliance.profile == "PDFA" and self._compliance.part in (2, 3):
+                self._set_min_pdf_version("1.7")
+            if self._compliance.profile == "PDFA" and self._compliance.part == 4:
+                self._set_min_pdf_version("2.0")
 
         self._current_draw_context = None
         # map page numbers to a set of GraphicsState names:
@@ -412,6 +436,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             encrypt_metadata (bool): whether to also encrypt document metadata (author, creation date, etc.).
                 Defaults to False.
         """
+        if self._compliance and self._compliance.profile == "PDFA":
+            raise PDFAComplianceError(
+                f"Encryption is now allowed for documents compliant with {self._compliance.label}"
+            )
+
         self._security_handler = StandardSecurityHandler(
             self,
             owner_password=owner_password,
@@ -1274,6 +1303,8 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             normalized (bool): whether normalization needs to be performed on the input string.
             markdown (bool): indicates if basic markdown support is enabled
         """
+        if not self.font_family:
+            raise FPDFException("No font set, you need to call set_font() beforehand")
         # normalized is parameter for internal use
         s = s if normalized else self.normalize_text(s)
         w = 0
@@ -2305,6 +2336,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                     f"Use built-in fonts or FPDF.add_font() beforehand"
                 )
             # If it's one of the core fonts, add it to self.fonts
+            if self._compliance and self._compliance.profile == "PDFA":
+                raise PDFAComplianceError(
+                    f"Usage of base fonts is now allowed for documents compliant with {self._compliance.label}. Use add_font() to embed a font file"
+                )
+
             self.fonts[fontkey] = CoreFont(self, fontkey, style)
 
         # Select it
@@ -2396,7 +2432,7 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         self._fallback_font_ids = tuple(fallback_font_ids)
         self._fallback_font_exact_match = exact_match
 
-    def add_link(self, y=0, x=0, page=-1, zoom="null"):
+    def add_link(self, y=0, x=0, page=-1, zoom="null", name=None):
         """
         Creates a new internal link and returns its identifier.
         An internal link is a clickable area which directs to another place within the document.
@@ -2404,6 +2440,9 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         The identifier can then be passed to the `FPDF.cell()`, `FPDF.write()`, `FPDF.image()`
         or `FPDF.link()` methods.
 
+        If a name is provided, creates a named destination that can be referenced later.
+        Named destinations are more stable than plain links when pages are added or removed.
+
         Args:
             y (float): optional ordinate of target position.
                 The default value is 0 (top of page).
@@ -2413,23 +2452,58 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 -1 indicates the current page, which is the default value.
             zoom (float): optional new zoom level after following the link.
                 Currently ignored by Sumatra PDF Reader, but observed by Adobe Acrobat reader.
+            name (str, optional): Name for the destination. If provided, creates a named
+                destination in the PDF that can be referenced from other parts of the document
+                or from external documents.
         """
+        # Create destination
         link = DestinationXYZ(
             self.page if page == -1 else page,
             top=self.h_pt - y * self.k,
             left=x * self.k,
             zoom=zoom,
         )
+
+        # Handle named destinations
+        if name is not None:
+            if not name or name.isspace():
+                raise ValueError("Destination name cannot be empty or whitespace")
+            self.named_destinations[name] = link
+
+        # Store link and return index
         link_index = len(self.links) + 1
         self.links[link_index] = link
         return link_index
 
-    def set_link(self, link, y=0, x=0, page=-1, zoom="null"):
+    def get_named_destination(self, name):
+        """
+        Retrieves a named destination by its name and creates a link to it.
+
+        Args:
+            name (str): The name of the destination to retrieve.
+
+        Returns:
+            str: A string with format "#name" that can be used with cell(), write(), image(), or link()
+
+        Raises:
+            KeyError: If no destination exists with the given name
+        """
+        if name not in self.named_destinations:
+            # Create a placeholder named destination pointing to page 0
+            # This will be caught during output if never set properly
+            self.named_destinations[name] = DestinationXYZ(0, top=self.h_pt * self.k)
+
+        # Return the name prefixed with # to indicate it's a named destination
+        # This way, the link() method will use the named destination string
+        return f"#{name}"
+
+    def set_link(self, link=None, y=0, x=0, page=-1, zoom="null", name=None):
         """
         Defines the page and position a link points to.
 
         Args:
-            link (int): a link identifier returned by `FPDF.add_link()`.
+            link (int, optional): a link identifier returned by `FPDF.add_link()`.
+                If None and name is provided, will create or update a named destination.
             y (float): optional ordinate of target position.
                 The default value is 0 (top of page).
             x (float): optional abscissa of target position.
@@ -2438,7 +2512,25 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 -1 indicates the current page, which is the default value.
             zoom (float): optional new zoom level after following the link.
                 Currently ignored by Sumatra PDF Reader, but observed by Adobe Acrobat reader.
+            name (str, optional): Name for the destination. If provided, creates or updates a named
+                destination in the PDF that can be referenced from other parts of the document
+                or from external documents.
         """
+        # Handle named destination case
+        if name and link is None:
+            # Create the destination
+            dest = DestinationXYZ(
+                self.page if page == -1 else page,
+                top=self.h_pt - y * self.k,
+                left=x * self.k,
+                zoom=zoom,
+            )
+            # Store it in the named destinations dictionary
+            self.named_destinations[name] = dest
+            # Return the name for reference
+            return name
+
+        # Regular link handling (backward compatibility)
         # We must take care to update the existing DestinationXYZ,
         # and NOT re-assign self.links[link] to a new instance,
         # as a reference to self.links[link] is kept in self.pages[].annots:
@@ -2448,7 +2540,14 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         link.left = x * self.k
         link.zoom = zoom
 
-    @check_page
+        # If a name is provided with an existing link, associate the name with this link
+        if name:
+            self.named_destinations[name] = link
+            return name
+
+        # Return link index for backward compatibility
+        return link
+
     def link(self, x, y, w, h, link, alt_text=None, **kwargs):
         """
         Puts a link annotation on a rectangular area of the page.
@@ -2461,7 +2560,10 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             y (float): vertical position (from the top) to the bottom side of the link rectangle
             w (float): width of the link rectangle
             h (float): height of the link rectangle
-            link: either an URL or an integer returned by `FPDF.add_link`, defining an internal link to a page
+            link: can be one of the following:
+                - a URL string to create an external link
+                - an integer returned by `FPDF.add_link`, defining an internal link to a page
+                - a named destination string prefixed with '#' (e.g., '#chapter1')
             alt_text (str): optional textual description of the link, for accessibility purposes
             border_width (int): thickness of an optional black border surrounding the link.
                 Not all PDF readers honor this: Acrobat renders it but not Sumatra.
@@ -2469,7 +2571,21 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
         action, dest = None, None
         if link:
             if isinstance(link, str):
-                action = URIAction(link)
+                # Check if this is a named destination (prefixed with '#')
+                if link.startswith("#"):
+                    dest_name = link[1:]  # Remove the '#' prefix
+                    # If the named destination doesn't exist yet, create a placeholder
+                    # destination pointing to page 0 (which doesn't exist)
+                    # This will be caught during output if never set properly
+                    if dest_name not in self.named_destinations:
+                        self.named_destinations[dest_name] = DestinationXYZ(
+                            0, top=self.h_pt * self.k
+                        )
+                    # Use destination name instead of destination object for named destinations
+                    dest = PDFString(dest_name, encrypt=True)
+                else:
+                    # Regular URL
+                    action = URIAction(link)
             else:  # Dest type ending of annotation entry
                 assert (
                     link in self.links
@@ -2499,14 +2615,17 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
 
     def embed_file(
         self,
-        file_path=None,
-        bytes=None,
-        basename=None,
-        modification_date=None,
+        file_path: Optional[Union[str, Path]] = None,
+        bytes: Optional[bytes] = None,
+        basename: Optional[str] = None,
+        modification_date: Optional[datetime] = None,
+        mime_type: Optional[str] = None,
+        associated_file_relationship: Optional[str] = None,
         **kwargs,
     ):
         """
-        Embed a file into the PDF document
+        Embed a file into the PDF as an attachment (and, for PDF/A-3 or PDF/A-4f, as an
+        Associated File).
 
         Args:
             file_path (str or Path): filesystem path to the existing file to embed
@@ -2515,6 +2634,13 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             creation_date (datetime): date and time when the file was created
             modification_date (datetime): date and time when the file was last modified
             desc (str): optional description of the file
+            mime_type: MIME type of the embedded content (e.g., "application/pdf", "text/csv", "image/png")
+            associated_file_relationship: For PDF/A-3/A-4f, the AF relationship to declare in the FileSpec
+                (e.g., "Data", "Source", "Alternative", "Supplement", or "Unspecified").
+
+            **kwargs:
+            desc (str): Optional human-readable description for the FileSpec.
+            creation_date (datetime): Original creation time of the file.
             compress (bool): enabled zlib compression of the file - False by default
             checksum (bool): insert a MD5 checksum of the file content - False by default
 
@@ -2539,15 +2665,51 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 raise ValueError(
                     "'basename' is required if 'file_path' is not provided"
                 )
+        if mime_type is None:
+            mime_type = mimetypes.guess_type(basename)[0] or "application/octet-stream"
+        mime_type = mime_type.lower()
+        if associated_file_relationship:
+            associated_file_relationship = AssociatedFileRelationship.coerce(
+                associated_file_relationship
+            )
         already_embedded_basenames = set(
             file.basename() for file in self.embedded_files
         )
         if basename in already_embedded_basenames:
             raise ValueError(f"{basename} has already been embedded in this file")
+
+        if self._compliance and self._compliance.profile == "PDFA":
+            if self._compliance.part == 1:
+                raise PDFAComplianceError(
+                    f"Embedding files is not allowed for documents compliant with {self._compliance.label}"
+                )
+            if self._compliance.part == 2 or (
+                self._compliance.part == 4 and self._compliance.conformance is None
+            ):
+                if (mime_type == "application/pdf") or basename.lower().endswith(
+                    ".pdf"
+                ):
+                    LOGGER.warning(
+                        "%s: ensure the embedded PDF '%s' is itself PDF/A to remain compliant.",
+                        self._compliance.label,
+                        basename,
+                    )
+                else:
+                    raise PDFAComplianceError(
+                        f"{self._compliance.label} permits embedding only PDF files, which must themselves be PDF/A."
+                    )
+            if self._compliance.part in (3, 4):
+                if not associated_file_relationship:
+                    associated_file_relationship = (
+                        AssociatedFileRelationship.UNSPECIFIED
+                    )
+
         embedded_file = PDFEmbeddedFile(
             basename=basename,
             contents=bytes,
             modification_date=modification_date,
+            mime_type=mime_type,
+            af_relationship=associated_file_relationship,
             **kwargs,
         )
         self.embedded_files.append(embedded_file)
@@ -2685,8 +2847,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             w (float): width of the link rectangle
             h (float): height of the link rectangle
         """
+        annotation_action_type = "Action"
+        if isinstance(action, GoToAction):
+            annotation_action_type = "Link"
         annotation = AnnotationDict(
-            "Action",
+            annotation_action_type,
             x * self.k,
             self.h_pt - y * self.k,
             w * self.k,
@@ -5113,6 +5278,11 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
                 if tocp.reset_page_indices is False:
                     page.get_page_label().st = page_index
             assert len(new_pages) == 0, f"#new_pages: {len(new_pages)}"
+            # Fix links:
+            for dest in self.links.values():
+                new_index = indices_remap.get(dest.page_number)
+                if new_index is not None:
+                    dest.page_number = new_index
             # Fix outline:
             for section in self._outline:
                 new_index = indices_remap.get(section.page_number)
@@ -5746,6 +5916,28 @@ class FPDF(GraphicsStateMixin, TextRegionMixin):
             for _, font in self.fonts.items():
                 if font.type == "TTF" and font.color_font:
                     font.color_font.load_glyphs()
+            if self._compliance and self._compliance.profile == "PDFA":
+                if len(self._output_intents) == 0:
+                    self.add_output_intent(
+                        OutputIntentSubType.PDFA,
+                        output_condition_identifier="sRGB",
+                        output_condition="IEC 61966-2-1:1999",
+                        registry_name="http://www.color.org",
+                        dest_output_profile=PDFICCProfile(
+                            contents=builtin_srgb2014_bytes(),
+                            n=3,
+                            alternate="DeviceRGB",
+                        ),
+                        info="sRGB2014 (v2)",
+                    )
+                if (
+                    self._compliance.part == 4
+                    and self._compliance.conformance == "F"
+                    and len(self.embedded_files) == 0
+                ):
+                    raise PDFAComplianceError(
+                        f"{self._compliance.label} requires at least one embedded file"
+                    )
             if linearize:
                 output_producer_class = LinearizedOutputProducer
             output_producer = output_producer_class(self)
