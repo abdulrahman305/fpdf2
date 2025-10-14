@@ -18,6 +18,7 @@ This can also be enabled programmatically with `warnings.simplefilter('default',
 
 ## [2.8.5] - Not released yet
 ### Added
+* documentation on how to combine `fpdf2` with **Plone**: [UsageInWebAPI.html#plone](https://py-pdf.github.io/fpdf2/UsageInWebAPI.html#plone)
 * basic support for SVG `currentColor` color value - _cf._ [PR #1531](https://github.com/py-pdf/fpdf2/pull/1531)
 * Porter–Duff compositing operations and bounding box support to the drawing API - _cf._ [PR #1532](https://github.com/py-pdf/fpdf2/pull/1532)
 * support gradients as fill or stroke colors in the drawing API - _cf._ [PR #1539](https://github.com/py-pdf/fpdf2/pull/1539)
@@ -75,7 +76,7 @@ This can also be enabled programmatically with `warnings.simplefilter('default',
 * added Slovenian translation of the tutorial: [Vodič](https://py-pdf.github.io/fpdf2/Tutorial-sl.html) - thanks to @DeepBlackHole
 * support for adding TrueType fonts that are missing the `.notdef` glyph - [issue #1161](https://github.com/py-pdf/fpdf2/issues/1161) - thanks to @spacegaori
 * improved SVG image parsing speed by 50% to 70% - thanks to @petri-lipponen-movesense - [PR #1350](https://github.com/py-pdf/fpdf2/pull/1350)
-* [`TableBordersLayout`](https://py-pdf.github.io/fpdf2/fpdf/table.html#fpdf.table.TableBordersLayout) is now a non-enum class that supports customizable layouts. The members of the old enum class are now static members of the class and thus can be used as standard options using the same syntax as previously. 
+* [`TableBordersLayout`](https://py-pdf.github.io/fpdf2/fpdf/table.html#fpdf.table.TableBordersLayout) is now a non-enum class that supports customizable layouts. The members of the old enum class are now static members of the class and thus can be used as standard options using the same syntax as previously - _cf._ [PR #957](https://github.com/py-pdf/fpdf2/issues/957)
 ### Fixed
 * [`FPDF.write_html()`](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.write_html): Fixed rendering of content following `<a>` tags; now correctly resets emphasis style post `</a>` tag: hyperlink styling contained within the tag authority. - [issue #1311](https://github.com/py-pdf/fpdf2/issues/1311)
 * [FPDF.footer()](https://py-pdf.github.io/fpdf2/fpdf/fpdf.html#fpdf.fpdf.FPDF.footer) does not "leak" its text style to the [table of contents](https://py-pdf.github.io/fpdf2/DocumentOutlineAndTableOfContents.html#table-of-contents) anymore
